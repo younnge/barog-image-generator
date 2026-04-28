@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="favicon.png">
-    <title>바로그 월이벤트 생성기</title>
+    <title>월이벤트 생성기</title>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
         integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg=="
@@ -1245,7 +1245,6 @@
             -webkit-user-select: none;
         }
 
-        /* 의료법 위반 경고 스타일 */
         .violation-input {
             border: 2px solid #e11d48 !important;
             box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.1) !important;
@@ -1291,7 +1290,6 @@
             border-bottom: 6px solid #e11d48;
         }
 
-        /* 깜빡임 방지를 위한 마우스 이동 다리(Bridge) */
         .violation-tooltip::before {
             content: '';
             position: absolute;
@@ -1302,7 +1300,6 @@
             background: transparent;
         }
 
-        /* 툴팁 활성화 시 부모 레이어 우선순위 및 가두기 해제 */
         .has-active-tooltip {
             z-index: 100 !important;
             position: relative !important;
@@ -1335,7 +1332,7 @@
     </div>
     <div class="container">
         <div class="input-card glass-card">
-            <h1>바로그 월이벤트 생성기</h1>
+            <h1>월이벤트 생성기</h1>
 
             <div class="form-section">
                 <div class="form-row-group">
@@ -1345,7 +1342,7 @@
                             <span class="label-tip">✽ 불필요한 경우 공란</span>
                         </div>
                         <textarea id="topTitle" class="btn-input top-info-input auto-resize"
-                            placeholder="상단 제목 입력">바로그 강남점 4월 이벤트</textarea>
+                            placeholder="상단 제목 입력">강남점 4월 이벤트</textarea>
                     </div>
                     <div class="form-group-item">
                         <div class="label-with-tip">
@@ -1389,7 +1386,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span class="label" style="margin-bottom: 0;">항목 데이터</span>
-                        <span class="label-tip">✽ <> 강조</span>
+                        <span class="label-tip">✽ &lt;&gt; 강조 / { } 작게</span>
                     </div>
                     <button class="btn-toggle active" onclick="toggleAllAccordions()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -1586,7 +1583,6 @@
          * 의료법 위반 대응 사전 (BANNED_WORDS)
          * ============================================================ */
         const BANNED_WORDS = {
-            // 치환 가능 단어 (Mapping)
             '신데렐라주사': '티옥트산주사',
             '백옥주사': '글루타치온주사',
             '마늘주사': '알리마주사',
@@ -1598,6 +1594,7 @@
             '엑소좀': '피부재생관리',
             '에토좀': '피부재생관리',
             'ASCE': '피부재생관리',
+            'asce': '피부재생관리',
             'TA': '염증주사',
             '1+1': '1회 가격에 2회 시술',
             '2+1': '2회 가격에 3회 시술',
@@ -1609,8 +1606,6 @@
             's/v': '혜택',
             '서비스': '혜택',
             '증정': '포함',
-
-            // 사용 불가 단어 (Warning Only)
             '선착순': null,
             '기간제한 없음': null,
             '실비': null,
@@ -1618,8 +1613,6 @@
             '명품': null,
             '무너지지 않는': null,
             'Free': null,
-
-            // AI 자동 추가: 허위/과장 광고 소지 키워드
             '최초': null,
             '100%': null,
             '부작용 제로': null,
@@ -1636,19 +1629,13 @@
             '세계 1위': null,
             '부작용 걱정 없는': null,
             '확실한 보장': null,
-
-            // 추가 보편 키워드
             '최적': null,
             '완벽': null,
             '첨단': null,
             '획기적': null,
             '비교불가': null
         };
-
-        // 예외 단어 (검사 제외)
         const EXCEPTION_WORDS = ['태반주사', '엑토좀PTT'];
-
-        // 원본과 동일하게 500으로 원복
         const MAX_UNDO = 500;
 
         let undoHistory = [];
@@ -1679,15 +1666,8 @@
             if (!text) return [];
             const violations = [];
 
-            // 예외 단어 처리: 검사 전 임시 마스킹 (간단한 구현을 위해 순차 검사 시 체크)
             Object.keys(BANNED_WORDS).forEach(banned => {
-                if (EXCEPTION_WORDS.some(ex => ex.includes(banned) || banned.includes(ex))) {
-                    // 예외 단어와 겹치는 경우 정교한 처리가 필요하나, 
-                    // 요구사항에 따라 '태반주사', '엑토좀PTT'는 제외
-                }
-
                 if (text.includes(banned)) {
-                    // 해당 금지어가 예외 단어의 일부인지 확인
                     let isException = false;
                     EXCEPTION_WORDS.forEach(ex => {
                         const regex = new RegExp(ex, 'g');
@@ -1701,7 +1681,6 @@
                             }
                         }
                     });
-
                     if (!isException) {
                         violations.push({
                             word: banned,
@@ -1720,7 +1699,6 @@
 
             const currentViolationWord = violations.length > 0 ? violations[0].word : '';
 
-            // 위반 사항이 없으면 즉시 정리
             if (violations.length === 0) {
                 el.classList.remove('violation-input');
                 el.removeAttribute('data-last-violation');
@@ -1730,12 +1708,10 @@
                 return;
             }
 
-            // 동일 위반 시 재생성 방지
             if (el.getAttribute('data-last-violation') === currentViolationWord && parent.querySelector('.violation-tooltip')) {
                 return;
             }
 
-            // 기존 제거 및 클래스 추가
             const oldTooltip = parent.querySelector('.violation-tooltip');
             if (oldTooltip) oldTooltip.remove();
             parent.classList.add('has-active-tooltip');
@@ -1746,10 +1722,8 @@
             const violation = violations[0];
             const tooltip = document.createElement('div');
             tooltip.className = 'violation-tooltip';
-
             let content = `⚠️ 의료법 위반 소지 단어: '${violation.word}'`;
             tooltip.innerHTML = `<span>${content}</span>`;
-
             if (violation.replacement) {
                 const btn = document.createElement('button');
                 btn.className = 'fix-btn';
@@ -1767,7 +1741,6 @@
                 tooltip.appendChild(btn);
             }
 
-            // Flickering 방지 타이머 핸들링 (요소별 분리)
             const startHideTimer = () => {
                 clearTimeout(el._tooltipHideTimer);
                 el._tooltipHideTimer = setTimeout(() => {
@@ -1780,8 +1753,6 @@
             tooltip.addEventListener('mouseenter', () => clearTimeout(el._tooltipHideTimer));
             tooltip.addEventListener('mouseleave', startHideTimer);
 
-            // 기존 핸들러를 덮어쓰지 않도록 addEventListener 사용
-            // 중복 등록 방지: 이전 리스너 참조를 요소에 저장
             if (el._violationMouseLeave) el.removeEventListener('mouseleave', el._violationMouseLeave);
             if (el._violationMouseEnter) el.removeEventListener('mouseenter', el._violationMouseEnter);
             if (el._violationBlur) el.removeEventListener('blur', el._violationBlur);
@@ -1794,7 +1765,6 @@
 
             parent.appendChild(tooltip);
 
-            // 위치 보정
             tooltip.style.top = (el.offsetTop + el.offsetHeight + 6) + 'px';
             tooltip.style.left = el.offsetLeft + 'px';
             if (el.classList.contains('item-name')) {
@@ -1864,8 +1834,6 @@
             if (undoHistory.length > MAX_UNDO) undoHistory.shift();
             redoHistory = [];
             updateRemoteState();
-
-            // sessionStorage 즉시 반영 (디바운스 없이 중요한 변경 시 저장)
             saveToSessionStorage(snapshot);
         }
 
@@ -1909,11 +1877,10 @@
                     updateViolationUI(el);
                 }
             });
-            // 아이템 항목들에 대해서도 검사 수행
+
             document.querySelectorAll('.item-name').forEach(el => updateViolationUI(el));
             refreshAccordionVisibility();
 
-            // 선택 상태 복구
             if (data.selectedIds && Array.isArray(data.selectedIds)) {
                 data.selectedIds.forEach(id => {
                     const el = document.querySelector(`[data-undo-id="${id}"]`);
@@ -1921,7 +1888,6 @@
                 });
             }
 
-            // 북마크 체크 상태 복구
             if (data.checkedBookmarks && Array.isArray(data.checkedBookmarks)) {
                 data.checkedBookmarks.forEach(id => {
                     const cb = document.querySelector(`.bookmark-check[data-target-id="${id}"]`);
@@ -1931,7 +1897,6 @@
             }
 
             updateRemoteState();
-
             if (data.focusInfo) {
                 let target = null;
                 if (data.focusInfo.parentId) {
@@ -2010,13 +1975,11 @@
                     if (data.hasOwnProperty('topTitle') && typeof data.topTitle !== 'object') document.getElementById('topTitle').value = data.topTitle;
                     if (data.hasOwnProperty('topDate') && typeof data.topDate !== 'object') document.getElementById('topDate').value = data.topDate;
                     if (data.hasOwnProperty('botText') && typeof data.botText !== 'object') document.getElementById('botText').value = data.botText;
-
                     if (data.themeColor) updateColorSync('theme', data.themeColor);
                     else if (data.topTitle && data.topTitle.color) updateColorSync('theme', data.topTitle.color);
 
                     if (data.items) restoreSnapshot(data.items);
                     else if (Array.isArray(data)) restoreSnapshot(data);
-
                     if (data.bgImage) {
                         const img = new Image();
                         img.src = data.bgImage;
@@ -2061,14 +2024,11 @@
                     focusInfo: snapshot.focusInfo,
                     selectedIds: snapshot.selectedIds
                 };
-
                 sessionStorage.setItem(SS_KEY, JSON.stringify(eventData));
                 sessionStorage.setItem(SS_BOOKMARK_KEY, JSON.stringify(snapshot.checkedBookmarks || []));
 
                 if (cachedBgImg?.src?.startsWith('data:')) {
-                    try { sessionStorage.setItem(SS_BG_KEY, cachedBgImg.src); } catch (e) {
-                        console.warn('배경 이미지 저장 용량 초과');
-                    }
+                    try { sessionStorage.setItem(SS_BG_KEY, cachedBgImg.src); } catch (e) { console.warn('배경 이미지 저장 용량 초과'); }
                 }
             } catch (e) { console.warn('sessionStorage 저장 실패:', e.message); }
         }
@@ -2080,15 +2040,13 @@
 
                 const data = JSON.parse(savedData);
                 const bookmarkData = JSON.parse(sessionStorage.getItem(SS_BOOKMARK_KEY) || '[]');
-
-                // 스냅샷 데이터에 북마크 정보 합치기
                 data.checkedBookmarks = bookmarkData;
-
                 restoreSnapshot(data);
 
                 const bgData = sessionStorage.getItem(SS_BG_KEY);
                 if (bgData) {
-                    const img = new Image(); img.src = bgData;
+                    const img = new Image();
+                    img.src = bgData;
                     img.onload = () => {
                         cachedBgImg = img;
                         document.getElementById('fileLabel').textContent = '임시 저장에서 복원된 배경 이미지';
@@ -2106,7 +2064,6 @@
             const container = document.getElementById('itemsContainer');
             const btn = document.querySelector('.btn-toggle');
             isAllCollapsed ? btn.classList.remove('active') : btn.classList.add('active');
-
             Array.from(container.children).forEach(node => {
                 if (node.classList.contains('section-title-wrapper')) {
                     isAllCollapsed ? node.classList.add('collapsed') : node.classList.remove('collapsed');
@@ -2122,7 +2079,6 @@
             wrapper.className = 'section-title-wrapper';
             wrapper.setAttribute('data-undo-id', undoId || generateUniqueId('sec'));
             if (isCollapsed) wrapper.classList.add('collapsed');
-
             wrapper.innerHTML = `
                 <div class="event-badge-wrapper"><div class="event-badge">이벤트</div><div class="section-accordion-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div>
                 <div class="handle-column"><div class="drag-handle">${DRAG_HANDLE_SVG}</div></div>
@@ -2160,6 +2116,7 @@
                     <button class="btn-remove" onclick="deleteSection(this)" title="섹션 및 하위 항목 전체 삭제">${CLOSE_SVG_16}</button>
                 </div>
             `;
+
             container.appendChild(wrapper);
             initDragAndDrop(wrapper);
 
@@ -2192,7 +2149,6 @@
                 }
             }
             refreshAccordionVisibility();
-
             if (!preventWindowScroll) {
                 const y = targetNode.getBoundingClientRect().top + window.scrollY - 20;
                 window.scrollTo({ top: y, behavior: 'smooth' });
@@ -2272,7 +2228,6 @@
 
         function downloadSelectedImages() {
             if (generatedImagesUrls.length === 0) return alert('먼저 이미지를 생성해주세요.');
-
             const checkedBoxes = Array.from(document.getElementById('bookmarkSidebar').querySelectorAll('.bookmark-check[data-target-id]:checked'));
             if (checkedBoxes.length === 0) return alert('다운로드할 북마크를 체크해주세요.');
 
@@ -2284,10 +2239,8 @@
                     if (pIdx !== null) selectedIndices.add(parseInt(pIdx));
                 }
             });
-
             const indices = Array.from(selectedIndices).sort((a, b) => a - b);
             if (indices.length === 0) return alert('선택한 항목에 대한 생성된 이미지가 없습니다.');
-
             const topTitle = document.getElementById('topTitle').value.replace(/[\\/:*?"<>|]/g, "_") || "이벤트";
             const now = new Date();
             const dateStr = now.getFullYear().toString().slice(-2) + (now.getMonth() + 1).toString().padStart(2, '0') + now.getDate().toString().padStart(2, '0');
@@ -2417,13 +2370,14 @@
         }
 
         function autoResizeTextarea(el) {
+            const originalTransition = el.style.transition;
+            el.style.transition = 'none';
             el.style.height = '38px';
-            const scrollHeight = el.scrollHeight;
-            if (scrollHeight > 38) {
-                el.style.height = scrollHeight + 'px';
-            } else {
-                el.style.height = '38px';
-            }
+            const borderHeight = el.offsetHeight - el.clientHeight;
+            const targetHeight = el.scrollHeight + borderHeight;
+            el.style.height = Math.max(38, targetHeight) + 'px';
+            el.offsetHeight;
+            el.style.transition = originalTransition;
         }
 
         function duplicateItemRow(btn) {
@@ -2460,7 +2414,6 @@
                 null,
                 currentSection.querySelector('.section-body-size')?.value || "25"
             );
-
             const container = document.getElementById('itemsContainer');
             const newSection = container.lastElementChild;
             if (nextNode) container.insertBefore(newSection, nextNode);
@@ -2470,7 +2423,6 @@
                 const newRow = createItemRow(item.itemName, item.unit, item.price);
                 insertBeforeNode ? container.insertBefore(newRow, insertBeforeNode) : container.appendChild(newRow);
             });
-
             refreshAccordionVisibility();
             debouncedGenerateImages();
         }
@@ -2558,7 +2510,6 @@
                     dragGroup.push(node);
                 }
             });
-
             dragGroup.forEach(el => el.classList.add('dragging'));
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', '');
@@ -2569,7 +2520,6 @@
             if (e.preventDefault) e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             if (this === dragSrcEl || dragGroup.includes(this)) return false;
-
             const isAfter = e.clientY > (this.getBoundingClientRect().top + this.getBoundingClientRect().height / 2);
             if (isAfter) {
                 let targetNode = this;
@@ -2622,7 +2572,6 @@
                 debouncedGenerateImages();
             }
         });
-
         document.getElementById('dropZone').addEventListener('click', () => document.getElementById('bgInput').click());
         document.getElementById('dropZone').addEventListener('dragover', function (e) { e.preventDefault(); this.classList.add('file-attached'); });
         document.getElementById('dropZone').addEventListener('dragleave', function () { if (!cachedBgImg) this.classList.remove('file-attached'); });
@@ -2643,11 +2592,9 @@
 
         async function generateImages() {
             if (!cachedBgImg) return;
-
             const container = document.getElementById('itemsContainer');
             const pages = [];
             let currentSections = [], currentSection = { title: "", titleSize: "49", bodySize: 25, layout: "horizontal", items: [] }, pageIdx = 0;
-
             Array.from(container.children).forEach(child => {
                 if (child.classList.contains('page-break-wrapper')) {
                     if (currentSection.items.length > 0 || currentSection.title !== "") currentSections.push(currentSection);
@@ -2668,7 +2615,6 @@
             });
             if (currentSection.items.length > 0 || currentSection.title !== "") currentSections.push(currentSection);
             if (currentSections.length > 0) pages.push({ sections: currentSections });
-
             if (pages.length === 0) return alert('입력된 항목 데이터가 없습니다.');
 
             const fontsToLoad = ['27px "GmarketSansMedium"', '700 39px "GmarketSansBold"', '700 49px "GmarketSansBold"', '700 59px "GmarketSansBold"', '25px "Pretendard"', '700 25px "Pretendard"', '800 23px "Pretendard"', '800 48px "Pretendard"', '700 29px "Pretendard"', '25px "Noto Sans JP"', '25px "Noto Sans SC"', '25px "Noto Sans TC"', '25px "Noto Sans Thai"'];
@@ -2679,7 +2625,6 @@
             previewContainer.innerHTML = '';
             generatedImagesUrls = [];
             const botText = document.getElementById('botText').value.trim();
-
             pages.forEach(page => {
                 const formattedSections = page.sections.map(sec => ({
                     title: sec.title, titleSize: sec.titleSize || "49", bodySize: sec.bodySize || 25, layout: sec.layout || "horizontal", groups: convertToGroups(sec.items)
@@ -2712,7 +2657,6 @@
         function downloadAllImages() {
             if (generatedImagesUrls.length === 0) return;
             if (!isBackedUp && !confirm("⚠️ 아직 백업되지 않은 변경 사항이 있습니다.\n\n[확인] 다운로드를 진행합니다.\n[취소] → [파일 백업] 버튼을 눌러 데이터를 먼저 저장하세요.")) return;
-
             const topTitle = document.getElementById('topTitle').value.replace(/[\\/:*?"<>|]/g, "_") || "이벤트";
             const now = new Date();
             const dateStr = now.getFullYear().toString() + (now.getMonth() + 1).toString().padStart(2, '0') + now.getDate().toString().padStart(2, '0');
@@ -2754,21 +2698,35 @@
         }
 
         function parseStyledText(text) {
-            const chunks = []; let chunkString = "", isHighlight = false;
+            const chunks = [];
+            let chunkString = "", isHighlight = false, isSmall = false;
             for (let i = 0; i < text.length; i++) {
-                if (text[i] === '<' || text[i] === '>') {
-                    if (chunkString.length > 0) { chunks.push({ text: chunkString, isHighlight }); chunkString = ""; }
-                    isHighlight = (text[i] === '<');
-                } else chunkString += text[i];
+                if (text[i] === '<') {
+                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
+                    chunkString = ""; isHighlight = true;
+                } else if (text[i] === '>') {
+                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
+                    chunkString = ""; isHighlight = false;
+                } else if (text[i] === '{') {
+                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
+                    chunkString = ""; isSmall = true;
+                } else if (text[i] === '}') {
+                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
+                    chunkString = ""; isSmall = false;
+                } else {
+                    chunkString += text[i];
+                }
             }
-            if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight });
+            if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
             return chunks;
         }
 
         function getStyledTextWidth(ctx, text, baseSize = 27, isTitle = false) {
-            let totalWidth = 0; const originalFont = ctx.font;
+            let totalWidth = 0;
+            const originalFont = ctx.font;
             parseStyledText(text).forEach(chunk => {
-                ctx.font = isTitle ? `700 ${baseSize}px 'GmarketSansBold', ${CONFIG.fonts.main}` : `${isKorean(chunk.text) ? 700 : 500} ${baseSize}px ${CONFIG.fonts.main}`;
+                const currentSize = chunk.isSmall ? Math.floor(baseSize * 0.75) : baseSize;
+                ctx.font = isTitle ? `700 ${currentSize}px 'GmarketSansBold', ${CONFIG.fonts.main}` : `${isKorean(chunk.text) ? 700 : 500} ${currentSize}px ${CONFIG.fonts.main}`;
                 totalWidth += ctx.measureText(chunk.text).width;
             });
             ctx.font = originalFont;
@@ -2777,29 +2735,61 @@
 
         function wrapTextChar(ctx, text, maxWidth, baseSize = 27, isTitle = false) {
             const resultLines = [];
+            let activeHighlight = false;
+            let activeSmall = false;
+
             text.split('\n').forEach(paragraph => {
                 if (paragraph === '') {
                     resultLines.push('');
                     return;
                 }
+
                 let currentLine = '';
+                // 문단(Enter)이 바뀔 때, 이전 줄에서 열려있던 기호가 있다면 새 줄 맨 앞에 자동으로 붙여줌
+                if (activeHighlight) currentLine += '<';
+                if (activeSmall) currentLine += '{';
+
                 for (let i = 0; i < paragraph.length; i++) {
-                    let testLine = currentLine + paragraph[i];
-                    if (getStyledTextWidth(ctx, testLine, baseSize, isTitle) > maxWidth && i > 0) {
-                        resultLines.push(currentLine); currentLine = paragraph[i];
-                    } else currentLine = testLine;
+                    let char = paragraph[i];
+                    let testLine = currentLine + char;
+
+                    // 화면에 보이는 실제 글자(기호 제외)가 1자 이상 있는지 확인 (무한 줄바꿈 방지)
+                    let hasVisibleChars = currentLine.replace(/[<>{}]/g, '').length > 0;
+
+                    // 너비가 초과되어 자동으로 줄이 넘어갈 때의 처리
+                    if (getStyledTextWidth(ctx, testLine, baseSize, isTitle) > maxWidth && hasVisibleChars) {
+                        resultLines.push(currentLine);
+                        currentLine = '';
+
+                        // 윗줄에서 기호가 안 닫혔다면, 자동으로 넘어간 다음 줄 맨 앞에도 기호를 붙여줌
+                        if (activeHighlight) currentLine += '<';
+                        if (activeSmall) currentLine += '{';
+                        currentLine += char;
+                    } else {
+                        currentLine = testLine;
+                    }
+
+                    // 글자를 하나씩 읽으면서 기호가 열렸는지 닫혔는지 상태 업데이트
+                    if (char === '<') activeHighlight = true;
+                    else if (char === '>') activeHighlight = false;
+                    else if (char === '{') activeSmall = true;
+                    else if (char === '}') activeSmall = false;
                 }
-                if (currentLine) resultLines.push(currentLine);
+                if (currentLine) {
+                    resultLines.push(currentLine);
+                }
             });
             return resultLines;
         }
 
         function roundRect(ctx, x, y, width, height, radius) {
-            ctx.beginPath(); ctx.moveTo(x + radius, y);
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
             ctx.lineTo(x + width - radius, y); ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
             ctx.lineTo(x + width, y + height - radius); ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
             ctx.lineTo(x + radius, y + height); ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-            ctx.lineTo(x, y + radius); ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
             ctx.closePath(); ctx.fill();
         }
 
@@ -2815,7 +2805,6 @@
 
             const startX = 105, endX = 895, unitPriceGap = 25;
             let totalSectionsHeight = 0, canvasMaxPriceWidth = 0, canvasMaxUnitW = 0;
-
             sections.forEach(sec => {
                 const baseSize = sec.bodySize || 25;
                 sec.groups.forEach(group => {
@@ -2875,7 +2864,7 @@
                 ctx.letterSpacing = "-2px";
 
                 sec.titleLines = sec.title ? wrapTextChar(ctx, sec.title, 800, tSize, true) : [];
-                sec.bannerHeight = sec.title ? (sec.titleLines.length * (tSize * 1.2) + (tSize * 0.95)) : 0;
+                sec.bannerHeight = sec.title ? (sec.titleLines.length * (tSize * 1.0) + (tSize * 0.95)) : 0;
                 sec.whiteBoxHeight = sec.groups.length > 0 ? ((sec.layout === 'vertical' ? 60 : 15) * 2 + sec.metrics.secItemHalfHeight * 2 + totalListHeight) : 0;
                 sec.totalSectionHeight = sec.bannerHeight + sec.whiteBoxHeight;
                 totalSectionsHeight += sec.totalSectionHeight + (sIdx < sections.length - 1 ? 2 : 0);
@@ -2901,14 +2890,30 @@
                 if (sec.title) {
                     ctx.fillStyle = themeColor;
                     ctx.fillRect(60, currentSectionY, 880, sec.bannerHeight);
-                    ctx.fillStyle = "white";
-                    ctx.font = `700 ${sec.titleSize}px 'GmarketSansBold', 'Noto Sans JP', 'Noto Sans SC', 'Noto Sans TC', 'Noto Sans Thai', sans-serif`;
-                    ctx.letterSpacing = "-2px";
-                    ctx.textAlign = "center";
+
+                    // 글자를 조각내어 그리기 위해 기준점을 왼쪽으로 변경
+                    ctx.textAlign = "left";
                     ctx.textBaseline = "middle";
 
-                    const titleStartY = currentSectionY + (sec.bannerHeight / 2) - ((sec.titleLines.length - 1) * (sec.titleSize * 1.2)) / 2;
-                    sec.titleLines.forEach((line, i) => ctx.fillText(line, 500, titleStartY + (i * (sec.titleSize * 1.2))));
+                    const titleStartY = currentSectionY + (sec.bannerHeight / 2) - ((sec.titleLines.length - 1) * (sec.titleSize * 1.0)) / 2;
+
+                    sec.titleLines.forEach((line, i) => {
+                        // 작아진 글씨 크기까지 계산하여 중앙 정렬이 되도록 시작점(currentX)을 잡아줍니다.
+                        let currentX = 500 - getStyledTextWidth(ctx, line, sec.titleSize, true) / 2;
+
+                        parseStyledText(line).forEach(chunk => {
+                            // { } 안의 글씨는 75% 크기로 축소
+                            const currentSize = chunk.isSmall ? Math.floor(sec.titleSize * 0.75) : sec.titleSize;
+                            ctx.font = `700 ${currentSize}px 'GmarketSansBold', ${CONFIG.fonts.main}`;
+
+                            // 제목은 배경이 테마색이므로 텍스트는 항상 흰색으로 고정
+                            ctx.fillStyle = "white";
+
+                            ctx.fillText(chunk.text, currentX, titleStartY + (i * (sec.titleSize * 1.0)));
+                            currentX += ctx.measureText(chunk.text).width;
+                        });
+                    });
+
                     whiteBoxTop += sec.bannerHeight;
                 }
 
@@ -2930,7 +2935,8 @@
                             group.lines.forEach((line, i) => {
                                 let currentX = 500 - getStyledTextWidth(ctx, line, sec.metrics.baseSize, false) / 2;
                                 parseStyledText(line).forEach(chunk => {
-                                    ctx.font = `${isKorean(chunk.text) ? 700 : 500} ${sec.metrics.baseSize}px ${CONFIG.fonts.main}`;
+                                    const currentSize = chunk.isSmall ? Math.floor(sec.metrics.baseSize * 0.75) : sec.metrics.baseSize;
+                                    ctx.font = `${isKorean(chunk.text) ? 700 : 500} ${currentSize}px ${CONFIG.fonts.main}`;
                                     ctx.fillStyle = chunk.isHighlight ? themeColor : "black";
                                     ctx.fillText(chunk.text, currentX, currentY + (i * sec.metrics.secTextLineGap));
                                     currentX += ctx.measureText(chunk.text).width;
@@ -2969,10 +2975,12 @@
                             });
                         } else {
                             const groupCenterY = currentY + group.heightSpan / 2;
+
                             group.lines.forEach((line, i) => {
                                 let currentX = startX;
                                 parseStyledText(line).forEach(chunk => {
-                                    ctx.font = `${isKorean(chunk.text) ? 700 : 500} ${sec.metrics.baseSize}px ${CONFIG.fonts.main}`;
+                                    const currentSize = chunk.isSmall ? Math.floor(sec.metrics.baseSize * 0.75) : sec.metrics.baseSize;
+                                    ctx.font = `${isKorean(chunk.text) ? 700 : 500} ${currentSize}px ${CONFIG.fonts.main}`;
                                     ctx.fillStyle = chunk.isHighlight ? themeColor : "black";
                                     ctx.fillText(chunk.text, currentX, groupCenterY - ((group.lines.length - 1) * sec.metrics.secTextLineGap) / 2 + (i * sec.metrics.secTextLineGap));
                                     currentX += ctx.measureText(chunk.text).width;
@@ -3060,7 +3068,7 @@
                     el.addEventListener('focus', () => { el._beforeValue = el.value; });
                     el.addEventListener('blur', () => { if (el._beforeValue !== el.value) { const current = el.value; el.value = el._beforeValue; saveSnapshot(); el.value = current; } });
                     autoResizeTextarea(el);
-                    updateViolationUI(el); // 초기 검사
+                    updateViolationUI(el);
                 }
             });
 
@@ -3072,7 +3080,7 @@
                 }
             });
 
-            // --- 이벤트 위임 (메모리 최적화 핵심부) ---
+            // --- 이벤트 위임 ---
             const container = document.getElementById('itemsContainer');
             container.addEventListener('input', (e) => {
                 if (e.target.matches('.btn-input')) {
@@ -3086,6 +3094,7 @@
                     handleInputSnapshot();
                 }
             });
+
             container.addEventListener('change', (e) => { if (e.target.matches('select.btn-input')) debouncedGenerateImages(); });
             container.addEventListener('paste', (e) => { if (e.target.matches('.btn-input')) setTimeout(() => { if (e.target.classList.contains('item-name') || e.target.classList.contains('section-title-input')) updateViolationUI(e.target); saveSnapshot(); }, 0); });
             container.addEventListener('focusin', (e) => { if (e.target.matches('.btn-input')) { e.target._beforeValue = e.target.value; updateViolationUI(e.target); } });
@@ -3098,7 +3107,7 @@
             // 원본의 기본 초기 데이터 복구
             if (!restoreFromSessionStorage()) {
                 addSectionTitle('굿바이 이벤트');
-                addItemRow(`<붓기삭제 종아리 슬림패키지>\n종아리 보톡스 200u + 슬림주사 100cc\n+지방타파레이저 1000샷`, '', '19만9천');
+                addItemRow(`<붓기삭제 종아리 슬림패키지>\n종아리 보톡스 200u + 슬림주사 100cc\n{지방타파레이저 1000샷}`, '', '19만9천');
                 addItemRow('보톡스', '', '9만');
                 addItemRow('필러', '1회', '4만');
                 addItemRow('필러', '3회', '11만');
