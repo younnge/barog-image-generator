@@ -1633,7 +1633,6 @@
             '전무': null,
             '완전 제거': null,
             '즉시 해결': null,
-            '강력 추천': null,
             '세계 1위': null,
             '부작용 걱정 없는': null,
             '확실한 보장': null,
@@ -2419,7 +2418,12 @@
 
         function autoResizeTextarea(el) {
             el.style.height = '38px';
-            if (el.scrollHeight > 38) el.style.height = el.scrollHeight + 'px';
+            const scrollHeight = el.scrollHeight;
+            if (scrollHeight > 38) {
+                el.style.height = scrollHeight + 'px';
+            } else {
+                el.style.height = '38px';
+            }
         }
 
         function duplicateItemRow(btn) {
@@ -2658,7 +2662,7 @@
                     currentSection.layout = child.querySelector('.section-title-layout').value;
                     child.setAttribute('data-page-index', pageIdx);
                 } else if (child.classList.contains('item-row')) {
-                    const itemName = child.querySelector('.item-name').value.trim(), unit = child.querySelector('.item-unit').value.trim(), price = child.querySelector('.item-price').value.trim();
+                    const itemName = child.querySelector('.item-name').value, unit = child.querySelector('.item-unit').value.trim(), price = child.querySelector('.item-price').value.trim();
                     if (itemName || unit || price) currentSection.items.push({ itemName, unit, price });
                 }
             });
@@ -2774,6 +2778,10 @@
         function wrapTextChar(ctx, text, maxWidth, baseSize = 27, isTitle = false) {
             const resultLines = [];
             text.split('\n').forEach(paragraph => {
+                if (paragraph === '') {
+                    resultLines.push('');
+                    return;
+                }
                 let currentLine = '';
                 for (let i = 0; i < paragraph.length; i++) {
                     let testLine = currentLine + paragraph[i];
