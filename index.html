@@ -1602,6 +1602,7 @@
             '통증없는': '통증줄인',
             '내성없는': '내성줄인',
             '무제한': '대용량',
+            '무제한': '하루권',
             '다이어트': '비만치료',
             's/v': '혜택',
             '서비스': '혜택',
@@ -2867,7 +2868,7 @@
                 sec.bannerHeight = sec.title ? (sec.titleLines.length * (tSize * 1.0) + (tSize * 0.95)) : 0;
                 sec.whiteBoxHeight = sec.groups.length > 0 ? ((sec.layout === 'vertical' ? 60 : 15) * 2 + sec.metrics.secItemHalfHeight * 2 + totalListHeight) : 0;
                 sec.totalSectionHeight = sec.bannerHeight + sec.whiteBoxHeight;
-                totalSectionsHeight += sec.totalSectionHeight + (sIdx < sections.length - 1 ? 2 : 0);
+                totalSectionsHeight += sec.totalSectionHeight + (sIdx < sections.length - 1 ? 10 : 0);
             });
 
             const eventBoxStartY = 500 - (totalSectionsHeight / 2);
@@ -3028,7 +3029,7 @@
                         }
                     });
                 }
-                currentSectionY += sec.totalSectionHeight + 2;
+                currentSectionY += sec.totalSectionHeight + 10;
             });
 
             ctx.textBaseline = "alphabetic";
