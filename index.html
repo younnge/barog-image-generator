@@ -794,7 +794,7 @@
             color: #4E5968;
             border: 1px solid #E5E8EB;
             font-size: 14px;
-            padding: 16px;
+            padding: 20px;
             font-weight: 600;
         }
 
@@ -1386,7 +1386,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span class="label" style="margin-bottom: 0;">항목 데이터</span>
-                        <span class="label-tip">✽ &lt;&gt; 강조 / { } 작게</span>
+                        <span class="label-tip">✽ &lt;&gt; 강조 / { } 작게 / | | 굵게</span>
                     </div>
                     <button class="btn-toggle active" onclick="toggleAllAccordions()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -1439,12 +1439,11 @@
                     이미지 생성하기
                 </button>
                 <button class="btn-download-selected" id="downloadSelectedBtn" onclick="downloadSelectedImages()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
-                        style="margin-right:8px; vertical-align:middle;">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" x2="12" y1="15" y2="3" />
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                        <path d="m9 12 2 2 4-4" />
+                        <rect x="8" y="2" width="8" height="4" rx="1" />
                     </svg>
                     선택 다운로드
                 </button>
@@ -1584,6 +1583,7 @@
          * ============================================================ */
         const BANNED_WORDS = {
             '신데렐라주사': '티옥트산주사',
+            '신데렐라': '티옥트산주사',
             '백옥주사': '글루타치온주사',
             '마늘주사': '알리마주사',
             '아기주사': '성장인자주사',
@@ -1598,6 +1598,10 @@
             'TA': '염증주사',
             '1+1': '1회 가격에 2회 시술',
             '2+1': '2회 가격에 3회 시술',
+            '5+5': '5회 가격에 10회 시술',
+            '5+1': '5회 가격에 6회 시술',
+            '6+6': '6회 가격에 12회 시술',
+            '10+10': '10회 가격에 20회 시술',
             '프리미엄': '시그니처',
             '통증없는': '통증줄인',
             '내성없는': '내성줄인',
@@ -1607,6 +1611,8 @@
             's/v': '혜택',
             '서비스': '혜택',
             '증정': '포함',
+            '연예인': null,
+            '이영애': null,
             '선착순': null,
             '기간제한 없음': null,
             '실비': null,
@@ -2700,25 +2706,28 @@
 
         function parseStyledText(text) {
             const chunks = [];
-            let chunkString = "", isHighlight = false, isSmall = false;
+            let chunkString = "", isHighlight = false, isSmall = false, isBold = false;
             for (let i = 0; i < text.length; i++) {
                 if (text[i] === '<') {
-                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
+                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
                     chunkString = ""; isHighlight = true;
                 } else if (text[i] === '>') {
-                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
+                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
                     chunkString = ""; isHighlight = false;
                 } else if (text[i] === '{') {
-                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
+                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
                     chunkString = ""; isSmall = true;
                 } else if (text[i] === '}') {
-                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
+                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
                     chunkString = ""; isSmall = false;
+                } else if (text[i] === '|') {
+                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
+                    chunkString = ""; isBold = !isBold;
                 } else {
                     chunkString += text[i];
                 }
             }
-            if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall });
+            if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
             return chunks;
         }
 
@@ -2727,7 +2736,8 @@
             const originalFont = ctx.font;
             parseStyledText(text).forEach(chunk => {
                 const currentSize = chunk.isSmall ? Math.floor(baseSize * 0.75) : baseSize;
-                ctx.font = isTitle ? `700 ${currentSize}px 'GmarketSansBold', ${CONFIG.fonts.main}` : `${isKorean(chunk.text) ? 700 : 500} ${currentSize}px ${CONFIG.fonts.main}`;
+                const boldWeight = chunk.isBold ? 800 : (isKorean(chunk.text) ? 700 : 500);
+                ctx.font = isTitle ? `700 ${currentSize}px 'GmarketSansBold', ${CONFIG.fonts.main}` : `${boldWeight} ${currentSize}px ${CONFIG.fonts.main}`;
                 totalWidth += ctx.measureText(chunk.text).width;
             });
             ctx.font = originalFont;
@@ -2738,6 +2748,7 @@
             const resultLines = [];
             let activeHighlight = false;
             let activeSmall = false;
+            let activeBold = false;
 
             text.split('\n').forEach(paragraph => {
                 if (paragraph === '') {
@@ -2749,13 +2760,14 @@
                 // 문단(Enter)이 바뀔 때, 이전 줄에서 열려있던 기호가 있다면 새 줄 맨 앞에 자동으로 붙여줌
                 if (activeHighlight) currentLine += '<';
                 if (activeSmall) currentLine += '{';
+                if (activeBold) currentLine += '|';
 
                 for (let i = 0; i < paragraph.length; i++) {
                     let char = paragraph[i];
                     let testLine = currentLine + char;
 
                     // 화면에 보이는 실제 글자(기호 제외)가 1자 이상 있는지 확인 (무한 줄바꿈 방지)
-                    let hasVisibleChars = currentLine.replace(/[<>{}]/g, '').length > 0;
+                    let hasVisibleChars = currentLine.replace(/[<>{}|]/g, '').length > 0;
 
                     // 너비가 초과되어 자동으로 줄이 넘어갈 때의 처리
                     if (getStyledTextWidth(ctx, testLine, baseSize, isTitle) > maxWidth && hasVisibleChars) {
@@ -2765,6 +2777,7 @@
                         // 윗줄에서 기호가 안 닫혔다면, 자동으로 넘어간 다음 줄 맨 앞에도 기호를 붙여줌
                         if (activeHighlight) currentLine += '<';
                         if (activeSmall) currentLine += '{';
+                        if (activeBold) currentLine += '|';
                         currentLine += char;
                     } else {
                         currentLine = testLine;
@@ -2775,6 +2788,7 @@
                     else if (char === '>') activeHighlight = false;
                     else if (char === '{') activeSmall = true;
                     else if (char === '}') activeSmall = false;
+                    else if (char === '|') activeBold = !activeBold;
                 }
                 if (currentLine) {
                     resultLines.push(currentLine);
@@ -2937,7 +2951,8 @@
                                 let currentX = 500 - getStyledTextWidth(ctx, line, sec.metrics.baseSize, false) / 2;
                                 parseStyledText(line).forEach(chunk => {
                                     const currentSize = chunk.isSmall ? Math.floor(sec.metrics.baseSize * 0.75) : sec.metrics.baseSize;
-                                    ctx.font = `${isKorean(chunk.text) ? 700 : 500} ${currentSize}px ${CONFIG.fonts.main}`;
+                                    const boldWeight = chunk.isBold ? 800 : (isKorean(chunk.text) ? 700 : 500);
+                                    ctx.font = `${boldWeight} ${currentSize}px ${CONFIG.fonts.main}`;
                                     ctx.fillStyle = chunk.isHighlight ? themeColor : "black";
                                     ctx.fillText(chunk.text, currentX, currentY + (i * sec.metrics.secTextLineGap));
                                     currentX += ctx.measureText(chunk.text).width;
@@ -2981,7 +2996,8 @@
                                 let currentX = startX;
                                 parseStyledText(line).forEach(chunk => {
                                     const currentSize = chunk.isSmall ? Math.floor(sec.metrics.baseSize * 0.75) : sec.metrics.baseSize;
-                                    ctx.font = `${isKorean(chunk.text) ? 700 : 500} ${currentSize}px ${CONFIG.fonts.main}`;
+                                    const boldWeight = chunk.isBold ? 800 : (isKorean(chunk.text) ? 700 : 500);
+                                    ctx.font = `${boldWeight} ${currentSize}px ${CONFIG.fonts.main}`;
                                     ctx.fillStyle = chunk.isHighlight ? themeColor : "black";
                                     ctx.fillText(chunk.text, currentX, groupCenterY - ((group.lines.length - 1) * sec.metrics.secTextLineGap) / 2 + (i * sec.metrics.secTextLineGap));
                                     currentX += ctx.measureText(chunk.text).width;
