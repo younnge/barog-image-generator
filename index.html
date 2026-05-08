@@ -2828,7 +2828,7 @@
                 } else if (node.type === 'ANGLE') {
                     const newState = {
                         ...currentState,
-                        isHighlight: true, 
+                        isHighlight: currentState.isHighlight || (node.sizeDelta === 0), 
                         sizeDelta: currentState.sizeDelta + node.sizeDelta
                     };
                     chunks = chunks.concat(flattenAST(node.children, newState));
