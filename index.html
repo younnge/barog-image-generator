@@ -1386,7 +1386,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span class="label" style="margin-bottom: 0;">항목 데이터</span>
-                        <span class="label-tip">✽ &lt;&gt; 강조 / { } 작게 / | | 굵게</span>
+                        <span class="label-tip">✽ &lt;&gt; 강조 / &lt;+ +&gt; 확대 / &lt;- -&gt; 축소 / { } 굵게</span>
                     </div>
                     <button class="btn-toggle active" onclick="toggleAllAccordions()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -1605,12 +1605,11 @@
             '프리미엄': '시그니처',
             '통증없는': '통증줄인',
             '내성없는': '내성줄인',
-            '무제한': '대용량',
-            '무제한': '하루권',
             '다이어트': '비만치료',
             's/v': '혜택',
             '서비스': '혜택',
             '증정': '포함',
+            '무제한': null,
             '연예인': null,
             '이영애': null,
             '선착순': null,
@@ -2114,8 +2113,8 @@
                 <div style="display:flex; flex-direction:column; gap:4px; width: 80px;">
                     <span style="font-size: 11px; font-weight: 800; color: var(--primary); margin-left: 4px;">정렬</span>
                     <select class="btn-input section-title-layout">
-                        <option value="horizontal" ${layout === 'horizontal' ? 'selected' : ''}>가로 리스트</option>
-                        <option value="vertical" ${layout === 'vertical' ? 'selected' : ''}>중앙 세로형</option>
+                        <option value="horizontal" ${layout === 'horizontal' ? 'selected' : ''}>가로 정렬</option>
+                        <option value="vertical" ${layout === 'vertical' ? 'selected' : ''}>세로 정렬</option>
                     </select>
                 </div>
                 <div class="row-actions" style="display:flex; flex-direction:row; gap:4px; align-self: flex-end; margin-bottom: 2px;">
@@ -2704,97 +2703,238 @@
             return { tokenMeta, totalWidth };
         }
 
-        function parseStyledText(text) {
-            const chunks = [];
-            let chunkString = "", isHighlight = false, isSmall = false, isBold = false;
-            for (let i = 0; i < text.length; i++) {
+        const SIZE_STEP = 5;
+
+        function tokenize(text) {
+            const tokens = [];
+            let currentText = "";
+            let i = 0;
+
+            const pushText = () => {
+                if (currentText) {
+                    tokens.push({ type: 'TEXT', value: currentText });
+                    currentText = "";
+                }
+            };
+
+            while (i < text.length) {
                 if (text[i] === '<') {
-                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
-                    chunkString = ""; isHighlight = true;
-                } else if (text[i] === '>') {
-                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
-                    chunkString = ""; isHighlight = false;
+                    pushText();
+                    let plusCount = 0;
+                    let minusCount = 0;
+                    let j = i + 1;
+                    while (j < text.length && text[j] === '+') { plusCount++; j++; }
+                    if (plusCount === 0) {
+                        while (j < text.length && text[j] === '-') { minusCount++; j++; }
+                    }
+                    tokens.push({ type: 'OPEN_ANGLE', sizeDelta: plusCount > 0 ? plusCount : -minusCount, rawLength: j - i });
+                    i = j;
+                } else if (text[i] === '>' && (i === 0 || text[i - 1] !== '=')) { // 간단한 휴리스틱: => 와 같은 경우는 무시 (필요시)
+                    // 뒤로 추적해서 +, - 개수 확인
+                    let plusCount = 0;
+                    let minusCount = 0;
+                    let j = i - 1;
+
+                    // 현재 currentText 끝에 있는 +나 -를 가져와야 함
+                    let k = currentText.length - 1;
+                    while (k >= 0 && currentText[k] === '+') { plusCount++; k--; }
+                    if (plusCount === 0) {
+                        while (k >= 0 && currentText[k] === '-') { minusCount++; k--; }
+                    }
+
+                    if (plusCount > 0 || minusCount > 0) {
+                        currentText = currentText.substring(0, k + 1); // +나 - 제거
+                    }
+                    pushText();
+
+                    tokens.push({ type: 'CLOSE_ANGLE', sizeDelta: plusCount > 0 ? plusCount : -minusCount });
+                    i++;
                 } else if (text[i] === '{') {
-                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
-                    chunkString = ""; isSmall = true;
+                    pushText();
+                    tokens.push({ type: 'OPEN_BRACE' });
+                    i++;
                 } else if (text[i] === '}') {
-                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
-                    chunkString = ""; isSmall = false;
-                } else if (text[i] === '|') {
-                    if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
-                    chunkString = ""; isBold = !isBold;
+                    pushText();
+                    tokens.push({ type: 'CLOSE_BRACE' });
+                    i++;
                 } else {
-                    chunkString += text[i];
+                    currentText += text[i];
+                    i++;
                 }
             }
-            if (chunkString.length > 0) chunks.push({ text: chunkString, isHighlight, isSmall, isBold });
+            pushText();
+            return tokens;
+        }
+
+        function parse(tokens) {
+            let pos = 0;
+
+            function parseBlock() {
+                const nodes = [];
+                while (pos < tokens.length) {
+                    const token = tokens[pos];
+                    if (token.type === 'TEXT') {
+                        nodes.push({ type: 'TEXT', value: token.value });
+                        pos++;
+                    } else if (token.type === 'OPEN_ANGLE') {
+                        pos++; // skip <
+                        const children = parseBlock();
+
+                        // 매칭되는 CLOSE_ANGLE 확인 (유효성 검사 완화: 없으면 끝까지)
+                        let closeDelta = 0;
+                        if (pos < tokens.length && tokens[pos].type === 'CLOSE_ANGLE') {
+                            closeDelta = tokens[pos].sizeDelta;
+                            pos++; // skip >
+                        }
+
+                        nodes.push({
+                            type: 'ANGLE',
+                            sizeDelta: token.sizeDelta || closeDelta, // 앞이나 뒤에 있는 크기 조절값 사용
+                            children: children
+                        });
+                    } else if (token.type === 'OPEN_BRACE') {
+                        pos++; // skip {
+                        const children = parseBlock();
+                        if (pos < tokens.length && tokens[pos].type === 'CLOSE_BRACE') {
+                            pos++; // skip }
+                        }
+                        nodes.push({
+                            type: 'BRACE',
+                            children: children
+                        });
+                    } else if (token.type === 'CLOSE_ANGLE' || token.type === 'CLOSE_BRACE') {
+                        // 현재 블록 종료
+                        break;
+                    }
+                }
+                return nodes;
+            }
+
+            return parseBlock();
+        }
+
+        function flattenAST(nodes, currentState) {
+            let chunks = [];
+            for (const node of nodes) {
+                if (node.type === 'TEXT') {
+                    if (node.value) {
+                        chunks.push({
+                            text: node.value,
+                            isHighlight: currentState.isHighlight,
+                            sizeDelta: currentState.sizeDelta,
+                            boldLevel: currentState.boldLevel
+                        });
+                    }
+                } else if (node.type === 'ANGLE') {
+                    const newState = {
+                        ...currentState,
+                        isHighlight: true, // < > 내부는 기본적으로 강조
+                        sizeDelta: currentState.sizeDelta + node.sizeDelta
+                    };
+                    chunks = chunks.concat(flattenAST(node.children, newState));
+                } else if (node.type === 'BRACE') {
+                    const newState = {
+                        ...currentState,
+                        boldLevel: currentState.boldLevel + 1
+                    };
+                    chunks = chunks.concat(flattenAST(node.children, newState));
+                }
+            }
             return chunks;
         }
 
-        function getStyledTextWidth(ctx, text, baseSize = 27, isTitle = false) {
-            let totalWidth = 0;
-            const originalFont = ctx.font;
-            parseStyledText(text).forEach(chunk => {
-                const currentSize = chunk.isSmall ? Math.floor(baseSize * 0.75) : baseSize;
-                const boldWeight = chunk.isBold ? 800 : (isKorean(chunk.text) ? 700 : 500);
-                ctx.font = isTitle ? `700 ${currentSize}px 'GmarketSansBold', ${CONFIG.fonts.main}` : `${boldWeight} ${currentSize}px ${CONFIG.fonts.main}`;
-                totalWidth += ctx.measureText(chunk.text).width;
-            });
-            ctx.font = originalFont;
-            return totalWidth;
+        function parseStyledText(text) {
+            text = String(text || '');
+            const tokens = tokenize(text);
+            const ast = parse(tokens);
+            const initialState = { isHighlight: false, sizeDelta: 0, boldLevel: 0 };
+            const chunks = flattenAST(ast, initialState);
+
+            // 연속된 동일 스타일 청크 병합 (렌더링 최적화)
+            const mergedChunks = [];
+            let current = null;
+            for (const chunk of chunks) {
+                if (!current) {
+                    current = { ...chunk };
+                } else if (current.isHighlight === chunk.isHighlight &&
+                    current.sizeDelta === chunk.sizeDelta &&
+                    current.boldLevel === chunk.boldLevel) {
+                    current.text += chunk.text;
+                } else {
+                    mergedChunks.push(current);
+                    current = { ...chunk };
+                }
+            }
+            if (current) mergedChunks.push(current);
+
+            return mergedChunks;
         }
 
-        function wrapTextChar(ctx, text, maxWidth, baseSize = 27, isTitle = false) {
-            const resultLines = [];
-            let activeHighlight = false;
-            let activeSmall = false;
-            let activeBold = false;
+        function getWeightFromLevel(level, text) {
+            if (level >= 2) return 900;
+            if (level === 1) return 800;
+            return isKorean(text) ? 700 : 500; // level 0
+        }
 
-            text.split('\n').forEach(paragraph => {
+        function wrapTextChunks(ctx, text, maxWidth, baseSize = 27, isTitle = false) {
+            text = String(text || '');
+            const lines = [];
+            const paragraphs = text.split('\n');
+
+            for (const paragraph of paragraphs) {
                 if (paragraph === '') {
-                    resultLines.push('');
-                    return;
+                    lines.push({ chunks: [], totalWidth: 0 });
+                    continue;
                 }
 
-                let currentLine = '';
-                // 문단(Enter)이 바뀔 때, 이전 줄에서 열려있던 기호가 있다면 새 줄 맨 앞에 자동으로 붙여줌
-                if (activeHighlight) currentLine += '<';
-                if (activeSmall) currentLine += '{';
-                if (activeBold) currentLine += '|';
+                const chunks = parseStyledText(paragraph);
+                let currentLineChunks = [];
+                let currentLineWidth = 0;
 
-                for (let i = 0; i < paragraph.length; i++) {
-                    let char = paragraph[i];
-                    let testLine = currentLine + char;
+                for (const chunk of chunks) {
+                    const currentSize = Math.max(10, baseSize + (chunk.sizeDelta * SIZE_STEP));
+                    const boldWeight = getWeightFromLevel(chunk.boldLevel, chunk.text);
+                    const chunkFont = isTitle ? `${boldWeight} ${currentSize}px 'GmarketSansBold', ${CONFIG.fonts.main}` : `${boldWeight} ${currentSize}px ${CONFIG.fonts.main}`;
+                    ctx.font = chunkFont;
 
-                    // 화면에 보이는 실제 글자(기호 제외)가 1자 이상 있는지 확인 (무한 줄바꿈 방지)
-                    let hasVisibleChars = currentLine.replace(/[<>{}|]/g, '').length > 0;
+                    let chunkText = chunk.text;
+                    let subChunkText = '';
+                    let subChunkWidth = 0;
 
-                    // 너비가 초과되어 자동으로 줄이 넘어갈 때의 처리
-                    if (getStyledTextWidth(ctx, testLine, baseSize, isTitle) > maxWidth && hasVisibleChars) {
-                        resultLines.push(currentLine);
-                        currentLine = '';
+                    for (let i = 0; i < chunkText.length; i++) {
+                        const char = chunkText[i];
+                        const testText = subChunkText + char;
+                        const testWidth = ctx.measureText(testText).width;
+                        const hasVisibleChars = currentLineWidth > 0 || subChunkText.length > 0;
 
-                        // 윗줄에서 기호가 안 닫혔다면, 자동으로 넘어간 다음 줄 맨 앞에도 기호를 붙여줌
-                        if (activeHighlight) currentLine += '<';
-                        if (activeSmall) currentLine += '{';
-                        if (activeBold) currentLine += '|';
-                        currentLine += char;
-                    } else {
-                        currentLine = testLine;
+                        if (currentLineWidth + testWidth > maxWidth && hasVisibleChars) {
+                            if (subChunkText) {
+                                const w = ctx.measureText(subChunkText).width;
+                                currentLineChunks.push({ ...chunk, text: subChunkText, width: w, font: chunkFont });
+                                currentLineWidth += w;
+                            }
+                            lines.push({ chunks: currentLineChunks, totalWidth: currentLineWidth });
+
+                            currentLineChunks = [];
+                            currentLineWidth = 0;
+                            subChunkText = char;
+                        } else {
+                            subChunkText = testText;
+                        }
                     }
 
-                    // 글자를 하나씩 읽으면서 기호가 열렸는지 닫혔는지 상태 업데이트
-                    if (char === '<') activeHighlight = true;
-                    else if (char === '>') activeHighlight = false;
-                    else if (char === '{') activeSmall = true;
-                    else if (char === '}') activeSmall = false;
-                    else if (char === '|') activeBold = !activeBold;
+                    if (subChunkText) {
+                        const w = ctx.measureText(subChunkText).width;
+                        currentLineChunks.push({ ...chunk, text: subChunkText, width: w, font: chunkFont });
+                        currentLineWidth += w;
+                    }
                 }
-                if (currentLine) {
-                    resultLines.push(currentLine);
+
+                if (currentLineChunks.length > 0) {
+                    lines.push({ chunks: currentLineChunks, totalWidth: currentLineWidth });
                 }
-            });
-            return resultLines;
+            }
+            return lines;
         }
 
         function roundRect(ctx, x, y, width, height, radius) {
@@ -2862,11 +3002,11 @@
                     ctx.letterSpacing = "-1px";
 
                     if (sec.layout === "vertical") {
-                        group.lines = wrapTextChar(ctx, group.item, 800, baseSize, false);
+                        group.lines = wrapTextChunks(ctx, group.item, 800, baseSize, false);
                         group.heightSpan = ((group.lines.length - 1) * sec.metrics.secTextLineGap) + (group.rows.length > 0 ? ((group.rows.length - 1) * sec.metrics.secGroupRowGap + sec.metrics.secPriceAreaTopPadding) : 0);
                     } else {
                         const maxTextWidth = (endX - canvasMaxPriceWidth - unitPriceGap - (group.maxUnitW > 0 ? group.maxUnitW + 15 : 5)) - startX;
-                        group.lines = wrapTextChar(ctx, group.item, maxTextWidth, baseSize, false);
+                        group.lines = wrapTextChunks(ctx, group.item, maxTextWidth, baseSize, false);
                         group.heightSpan = Math.max((group.rows.length - 1) * sec.metrics.secGroupRowGap, (group.lines.length - 1) * sec.metrics.secTextLineGap);
                     }
                     totalListHeight += group.heightSpan + (index < sec.groups.length - 1 ? (sec.layout === 'vertical' ? sec.metrics.verticalLineGap : sec.metrics.horizontalLineGap) : 0);
@@ -2878,7 +3018,7 @@
                 ctx.font = `700 ${tSize}px 'GmarketSansBold', 'Noto Sans JP', 'Noto Sans SC', 'Noto Sans TC', 'Noto Sans Thai', sans-serif`;
                 ctx.letterSpacing = "-2px";
 
-                sec.titleLines = sec.title ? wrapTextChar(ctx, sec.title, 800, tSize, true) : [];
+                sec.titleLines = sec.title ? wrapTextChunks(ctx, sec.title, 800, tSize, true) : [];
                 sec.bannerHeight = sec.title ? (sec.titleLines.length * (tSize * 1.0) + (tSize * 0.95)) : 0;
                 sec.whiteBoxHeight = sec.groups.length > 0 ? ((sec.layout === 'vertical' ? 60 : 15) * 2 + sec.metrics.secItemHalfHeight * 2 + totalListHeight) : 0;
                 sec.totalSectionHeight = sec.bannerHeight + sec.whiteBoxHeight;
@@ -2910,22 +3050,17 @@
                     ctx.textAlign = "left";
                     ctx.textBaseline = "middle";
 
-                    const titleStartY = currentSectionY + (sec.bannerHeight / 2) - ((sec.titleLines.length - 1) * (sec.titleSize * 1.0)) / 2;
+                    const tSize = Number(sec.titleSize || 49);
+                    const titleStartY = currentSectionY + (sec.bannerHeight / 2) - ((sec.titleLines.length - 1) * (tSize * 1.0)) / 2;
 
-                    sec.titleLines.forEach((line, i) => {
-                        // 작아진 글씨 크기까지 계산하여 중앙 정렬이 되도록 시작점(currentX)을 잡아줍니다.
-                        let currentX = 500 - getStyledTextWidth(ctx, line, sec.titleSize, true) / 2;
+                    sec.titleLines.forEach((lineObj, i) => {
+                        let currentX = 500 - lineObj.totalWidth / 2;
 
-                        parseStyledText(line).forEach(chunk => {
-                            // { } 안의 글씨는 75% 크기로 축소
-                            const currentSize = chunk.isSmall ? Math.floor(sec.titleSize * 0.75) : sec.titleSize;
-                            ctx.font = `700 ${currentSize}px 'GmarketSansBold', ${CONFIG.fonts.main}`;
-
-                            // 제목은 배경이 테마색이므로 텍스트는 항상 흰색으로 고정
+                        lineObj.chunks.forEach(chunk => {
+                            ctx.font = chunk.font;
                             ctx.fillStyle = "white";
-
-                            ctx.fillText(chunk.text, currentX, titleStartY + (i * (sec.titleSize * 1.0)));
-                            currentX += ctx.measureText(chunk.text).width;
+                            ctx.fillText(chunk.text, currentX, titleStartY + (i * (tSize * 1.0)));
+                            currentX += chunk.width;
                         });
                     });
 
@@ -2947,26 +3082,24 @@
                         ctx.letterSpacing = "-1px";
 
                         if (sec.layout === "vertical") {
-                            group.lines.forEach((line, i) => {
-                                let currentX = 500 - getStyledTextWidth(ctx, line, sec.metrics.baseSize, false) / 2;
-                                parseStyledText(line).forEach(chunk => {
-                                    const currentSize = chunk.isSmall ? Math.floor(sec.metrics.baseSize * 0.75) : sec.metrics.baseSize;
-                                    const boldWeight = chunk.isBold ? 800 : (isKorean(chunk.text) ? 700 : 500);
-                                    ctx.font = `${boldWeight} ${currentSize}px ${CONFIG.fonts.main}`;
+                            group.lines.forEach((lineObj, i) => {
+                                let currentX = 500 - lineObj.totalWidth / 2;
+                                lineObj.chunks.forEach(chunk => {
+                                    ctx.font = chunk.font;
                                     ctx.fillStyle = chunk.isHighlight ? themeColor : "black";
                                     ctx.fillText(chunk.text, currentX, currentY + (i * sec.metrics.secTextLineGap));
-                                    currentX += ctx.measureText(chunk.text).width;
+                                    currentX += chunk.width;
                                 });
                             });
 
                             let priceStartY = currentY + ((group.lines.length - 1) * sec.metrics.secTextLineGap) + sec.metrics.secPriceAreaTopPadding;
-                            const groupRightX = 500 + (group.maxUnitW + (group.maxUnitW > 0 ? 15 : 0) + canvasMaxPriceWidth) / 2;
+                            const groupRightX = 500 + (group.maxUnitW + (group.maxUnitW > 0 ? 15 : 0) + group.localMaxPriceWidth) / 2;
 
                             group.rows.forEach((row, rowIndex) => {
                                 const rowCenterY = priceStartY + (rowIndex * sec.metrics.secGroupRowGap);
 
                                 if (group.maxUnitW > 0 && row.unit) {
-                                    const boxX = (groupRightX - canvasMaxPriceWidth - 15) - group.maxUnitW;
+                                    const boxX = (groupRightX - group.localMaxPriceWidth - 15) - group.maxUnitW;
                                     ctx.fillStyle = themeColor;
                                     roundRect(ctx, boxX, rowCenterY - (sec.metrics.baseSize / 25) * 20, group.maxUnitW, (sec.metrics.baseSize / 25) * 40, 10);
                                     ctx.font = `800 ${sec.metrics.baseSize - 2}px ${CONFIG.fonts.main}`;
@@ -2992,15 +3125,13 @@
                         } else {
                             const groupCenterY = currentY + group.heightSpan / 2;
 
-                            group.lines.forEach((line, i) => {
+                            group.lines.forEach((lineObj, i) => {
                                 let currentX = startX;
-                                parseStyledText(line).forEach(chunk => {
-                                    const currentSize = chunk.isSmall ? Math.floor(sec.metrics.baseSize * 0.75) : sec.metrics.baseSize;
-                                    const boldWeight = chunk.isBold ? 800 : (isKorean(chunk.text) ? 700 : 500);
-                                    ctx.font = `${boldWeight} ${currentSize}px ${CONFIG.fonts.main}`;
+                                lineObj.chunks.forEach(chunk => {
+                                    ctx.font = chunk.font;
                                     ctx.fillStyle = chunk.isHighlight ? themeColor : "black";
                                     ctx.fillText(chunk.text, currentX, groupCenterY - ((group.lines.length - 1) * sec.metrics.secTextLineGap) / 2 + (i * sec.metrics.secTextLineGap));
-                                    currentX += ctx.measureText(chunk.text).width;
+                                    currentX += chunk.width;
                                 });
                             });
 
@@ -3124,8 +3255,8 @@
             // 원본의 기본 초기 데이터 복구
             if (!restoreFromSessionStorage()) {
                 addSectionTitle('굿바이 이벤트');
-                addItemRow(`<붓기삭제 종아리 슬림패키지>\n종아리 보톡스 200u + 슬림주사 100cc\n{지방타파레이저 1000샷}`, '', '19만9천');
-                addItemRow('보톡스', '', '9만');
+                addItemRow(`<붓기삭제 종아리 슬림패키지>\n종아리 보톡스 200u + 슬림주사 100cc\n<-지방타파레이저 1000샷->`, '', '19만9천');
+                addItemRow('{보톡스}', '', '9만');
                 addItemRow('필러', '1회', '4만');
                 addItemRow('필러', '3회', '11만');
             }
