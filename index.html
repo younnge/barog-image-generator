@@ -2828,7 +2828,7 @@
                 } else if (node.type === 'ANGLE') {
                     const newState = {
                         ...currentState,
-                        isHighlight: true, // < > 내부는 기본적으로 강조
+                        isHighlight: true, 
                         sizeDelta: currentState.sizeDelta + node.sizeDelta
                     };
                     chunks = chunks.concat(flattenAST(node.children, newState));
@@ -2850,7 +2850,6 @@
             const initialState = { isHighlight: false, sizeDelta: 0, boldLevel: 0 };
             const chunks = flattenAST(ast, initialState);
 
-            // 연속된 동일 스타일 청크 병합 (렌더링 최적화)
             const mergedChunks = [];
             let current = null;
             for (const chunk of chunks) {
@@ -2873,67 +2872,79 @@
         function getWeightFromLevel(level, text) {
             if (level >= 2) return 900;
             if (level === 1) return 800;
-            return isKorean(text) ? 700 : 500; // level 0
+            return isKorean(text) ? 700 : 500; 
         }
 
         function wrapTextChunks(ctx, text, maxWidth, baseSize = 27, isTitle = false) {
             text = String(text || '');
+            if (text === '') return [{ chunks: [], totalWidth: 0 }];
+
             const lines = [];
-            const paragraphs = text.split('\n');
+            // 기존에는 \n으로 먼저 자른 뒤 파싱하여 서식이 끊겼으나,
+            // 전체를 한 번에 파싱하여 엔터를 가로지르는 서식을 완벽히 유지합니다.
+            const chunks = parseStyledText(text);
 
-            for (const paragraph of paragraphs) {
-                if (paragraph === '') {
-                    lines.push({ chunks: [], totalWidth: 0 });
-                    continue;
-                }
+            let currentLineChunks = [];
+            let currentLineWidth = 0;
 
-                const chunks = parseStyledText(paragraph);
-                let currentLineChunks = [];
-                let currentLineWidth = 0;
+            for (const chunk of chunks) {
+                const currentSize = Math.max(10, baseSize + (chunk.sizeDelta * SIZE_STEP));
+                const boldWeight = getWeightFromLevel(chunk.boldLevel, chunk.text);
+                const chunkFont = isTitle ? `${boldWeight} ${currentSize}px 'GmarketSansBold', ${CONFIG.fonts.main}` : `${boldWeight} ${currentSize}px ${CONFIG.fonts.main}`;
+                ctx.font = chunkFont;
 
-                for (const chunk of chunks) {
-                    const currentSize = Math.max(10, baseSize + (chunk.sizeDelta * SIZE_STEP));
-                    const boldWeight = getWeightFromLevel(chunk.boldLevel, chunk.text);
-                    const chunkFont = isTitle ? `${boldWeight} ${currentSize}px 'GmarketSansBold', ${CONFIG.fonts.main}` : `${boldWeight} ${currentSize}px ${CONFIG.fonts.main}`;
-                    ctx.font = chunkFont;
+                let chunkText = chunk.text;
+                let subChunkText = '';
 
-                    let chunkText = chunk.text;
-                    let subChunkText = '';
-                    let subChunkWidth = 0;
+                for (let i = 0; i < chunkText.length; i++) {
+                    const char = chunkText[i];
 
-                    for (let i = 0; i < chunkText.length; i++) {
-                        const char = chunkText[i];
-                        const testText = subChunkText + char;
-                        const testWidth = ctx.measureText(testText).width;
-                        const hasVisibleChars = currentLineWidth > 0 || subChunkText.length > 0;
-
-                        if (currentLineWidth + testWidth > maxWidth && hasVisibleChars) {
-                            if (subChunkText) {
-                                const w = ctx.measureText(subChunkText).width;
-                                currentLineChunks.push({ ...chunk, text: subChunkText, width: w, font: chunkFont });
-                                currentLineWidth += w;
-                            }
-                            lines.push({ chunks: currentLineChunks, totalWidth: currentLineWidth });
-
-                            currentLineChunks = [];
-                            currentLineWidth = 0;
-                            subChunkText = char;
-                        } else {
-                            subChunkText = testText;
+                    if (char === '\n') {
+                        // 사용자가 명시적으로 줄바꿈(엔터)을 입력한 경우
+                        if (subChunkText) {
+                            const w = ctx.measureText(subChunkText).width;
+                            currentLineChunks.push({ ...chunk, text: subChunkText, width: w, font: chunkFont });
+                            currentLineWidth += w;
                         }
+                        lines.push({ chunks: currentLineChunks, totalWidth: currentLineWidth });
+                        currentLineChunks = [];
+                        currentLineWidth = 0;
+                        subChunkText = '';
+                        continue;
                     }
 
-                    if (subChunkText) {
-                        const w = ctx.measureText(subChunkText).width;
-                        currentLineChunks.push({ ...chunk, text: subChunkText, width: w, font: chunkFont });
-                        currentLineWidth += w;
+                    const testText = subChunkText + char;
+                    const testWidth = ctx.measureText(testText).width;
+                    const hasVisibleChars = currentLineWidth > 0 || subChunkText.length > 0;
+
+                    if (currentLineWidth + testWidth > maxWidth && hasVisibleChars) {
+                        if (subChunkText) {
+                            const w = ctx.measureText(subChunkText).width;
+                            currentLineChunks.push({ ...chunk, text: subChunkText, width: w, font: chunkFont });
+                            currentLineWidth += w;
+                        }
+                        lines.push({ chunks: currentLineChunks, totalWidth: currentLineWidth });
+                        
+                        currentLineChunks = [];
+                        currentLineWidth = 0;
+                        subChunkText = char;
+                    } else {
+                        subChunkText = testText;
                     }
                 }
-
-                if (currentLineChunks.length > 0) {
-                    lines.push({ chunks: currentLineChunks, totalWidth: currentLineWidth });
+                
+                if (subChunkText) {
+                    const w = ctx.measureText(subChunkText).width;
+                    currentLineChunks.push({ ...chunk, text: subChunkText, width: w, font: chunkFont });
+                    currentLineWidth += w;
                 }
             }
+            
+            // 마지막 줄 처리 (문자열이 \n으로 끝나는 경우 포함)
+            if (currentLineChunks.length > 0 || text.endsWith('\n')) {
+                lines.push({ chunks: currentLineChunks, totalWidth: currentLineWidth });
+            }
+
             return lines;
         }
 
