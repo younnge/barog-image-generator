@@ -37,6 +37,21 @@ const BANNED_WORDS = {
 };
 const EXCEPTION_WORDS = ['태반주사', '엑토좀PTT'];
 
+// 검색마다 Regex를 새로 생성하지 않도록 모듈 로드 시 한 번만 컴파일
+const EXCEPTION_REGEXES = EXCEPTION_WORDS.map(ex => ({
+    word: ex,
+    re: new RegExp(ex.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+}));
+// BANNED_WORDS 소문자 중복 제거도 한 번만 처리
+const BANNED_ENTRIES = (() => {
+    const seen = new Set();
+    return Object.entries(BANNED_WORDS).reduce((acc, [word, replacement]) => {
+        const lower = word.toLowerCase();
+        if (!seen.has(lower)) { seen.add(lower); acc.push({ word, lower, replacement }); }
+        return acc;
+    }, []);
+})();
+
 /* ============================================================
  * 유틸리티
  * ============================================================ */
@@ -66,24 +81,18 @@ function checkMedicalLaw(text) {
     if (!text) return [];
     const violations = [];
     const lowerText = text.toLowerCase();
-    const seenLower = new Set();
-    const bannedEntries = [];
-    Object.entries(BANNED_WORDS).forEach(([word, replacement]) => {
-        const lower = word.toLowerCase();
-        if (!seenLower.has(lower)) { seenLower.add(lower); bannedEntries.push({ word, lower, replacement }); }
-    });
-    bannedEntries.forEach(({ word, lower, replacement }) => {
+    BANNED_ENTRIES.forEach(({ word, lower, replacement }) => {
         let searchFrom = 0, foundAt, hasNonException = false;
         while ((foundAt = lowerText.indexOf(lower, searchFrom)) !== -1) {
             let isException = false;
-            EXCEPTION_WORDS.forEach(ex => {
-                const lowerEx = ex.toLowerCase();
-                const exRegex = new RegExp(lowerEx.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+            for (const { word: exWord, re } of EXCEPTION_REGEXES) {
+                re.lastIndex = 0; // 사전 컴파일된 /g 정규식은 lastIndex를 초기화해야 함
                 let match;
-                while ((match = exRegex.exec(lowerText)) !== null) {
-                    if (foundAt >= match.index && foundAt < match.index + ex.length) isException = true;
+                while ((match = re.exec(lowerText)) !== null) {
+                    if (foundAt >= match.index && foundAt < match.index + exWord.length) { isException = true; break; }
                 }
-            });
+                if (isException) break;
+            }
             if (!isException) { hasNonException = true; break; }
             searchFrom = foundAt + 1;
         }
@@ -135,7 +144,9 @@ function updateViolationUI(el) {
     if (el._vlMouseLeave) el.removeEventListener('mouseleave', el._vlMouseLeave);
     el._vlMouseLeave = startHideTimer;
     el.addEventListener('mouseleave', el._vlMouseLeave);
-    el.addEventListener('blur', startHideTimer);
+    if (el._vlBlur) el.removeEventListener('blur', el._vlBlur);
+    el._vlBlur = startHideTimer;
+    el.addEventListener('blur', el._vlBlur);
     document.body.appendChild(tooltip);
     el._violTooltip = tooltip;
     const eRect = el.getBoundingClientRect();
@@ -225,6 +236,8 @@ function restoreSnapshot(data) {
         document.getElementById('headerHeightLabel').textContent = data.headerHeight + '%';
     }
     const container = document.getElementById('itemsContainer');
+    // innerHTML 교체 전 남아있는 위반 툴팁을 body에서 제거
+    container.querySelectorAll('.btn-input').forEach(el => { el._violTooltip?.remove(); el._violTooltip = null; });
     container.innerHTML = '';
     (data.items || []).forEach(item => {
         if (item.type === 'item') addItemRow(item);
@@ -269,10 +282,15 @@ function markSaved() {
 function saveToSessionStorage(data = null) {
     try {
         sessionStorage.setItem(SS_KEY, JSON.stringify(data || getSnapshot()));
-        if (cachedBgImg?.src?.startsWith('data:')) {
-            try { sessionStorage.setItem(SS_BG_KEY, cachedBgImg.src); } catch(e) {}
-        }
-    } catch(e) {}
+    } catch(e) {
+        // QuotaExceededError 등 세션 저장 실패 — 항목 데이터조차 못 쓴 경우 경고
+        showColorToast('세션 저장 실패: 브라우저 저장 공간이 부족합니다');
+        return;
+    }
+    if (cachedBgImg?.src?.startsWith('data:')) {
+        try { sessionStorage.setItem(SS_BG_KEY, cachedBgImg.src); }
+        catch(e) { showColorToast('배경 이미지가 너무 커 세션에 저장되지 않았습니다'); }
+    }
 }
 function restoreFromSessionStorage() {
     try {
@@ -441,7 +459,6 @@ function refreshAccordionVisibility() {
             let count = 0;
             let next = node.nextElementSibling;
             while (next && !next.classList.contains('section-title-wrapper') &&
-                   !next.classList.contains('page-break-wrapper') &&
                    !next.classList.contains('column-break-wrapper')) {
                 if (next.classList.contains('item-row')) count++;
                 next = next.nextElementSibling;
@@ -450,7 +467,7 @@ function refreshAccordionVisibility() {
             if (arrow) arrow.style.display = count > 0 ? 'flex' : 'none';
             const badge = node.querySelector('.section-count-badge');
             if (badge) { badge.textContent = count > 0 ? count + '개' : ''; badge.style.display = (inCollapsed && count > 0) ? 'inline-flex' : 'none'; }
-        } else if (node.classList.contains('page-break-wrapper') || node.classList.contains('column-break-wrapper')) {
+        } else if (node.classList.contains('column-break-wrapper')) {
             inCollapsed = false;
             node.classList.remove('item-hidden');
         } else if (node.classList.contains('item-row')) {
@@ -469,7 +486,7 @@ function updateItemsEmptyState() {
     const container = document.getElementById('itemsContainer');
     const hasItems = Array.from(container.children).some(n =>
         n.classList.contains('item-row') || n.classList.contains('section-title-wrapper') ||
-        n.classList.contains('page-break-wrapper') || n.classList.contains('column-break-wrapper')
+        n.classList.contains('column-break-wrapper')
     );
     let hint = document.getElementById('itemsEmptyHint');
     if (!hasItems) {
@@ -1133,7 +1150,7 @@ function parseDomToPages() {
                 headerStyle: node.querySelector('.section-header-style')?.value || 'filled',
                 items: []
             };
-        } else if (node.classList.contains('item-row') && !node.classList.contains('item-hidden')) {
+        } else if (node.classList.contains('item-row')) {
             if (!currentSection) {
                 currentSection = { title: '', headerStyle: 'filled', items: [] };
             }
@@ -1162,11 +1179,13 @@ function parseDomToPages() {
 }
 
 function autoBalancePage(page) {
-    if (page.rightSections.length > 0) return;
+    if (page.hasColBreak || page.rightSections.length > 0) return;
     const all = [...page.leftSections];
+    if (all.length < 2) return;
     const mid = Math.ceil(all.length / 2);
     page.leftSections = all.slice(0, mid);
     page.rightSections = all.slice(mid);
+    page.hasColBreak = true; // 자동 분할도 2컬럼 레이아웃으로 렌더링
 }
 
 function generateImages() {
@@ -1191,6 +1210,7 @@ function generateImages() {
     const textColor = document.getElementById('textColorHex')?.value || '#000000';
 
     requestAnimationFrame(() => {
+        pages.forEach(autoBalancePage); // 컬럼 구분선 없으면 자동 2분할
         const canvases = pages.map(page =>
             drawA4Canvas(cachedBgImg, page.leftSections, page.rightSections, headerRatio, themeColor, numColor, topText, periodText, textColor, page.hasColBreak)
         );
@@ -1464,14 +1484,10 @@ function loadProject(event) {
         try {
             const data = JSON.parse(e.target.result);
             restoreSnapshot(data);
-            if (data.bgImage) {
-                const img = new Image();
-                img.src = data.bgImage;
-                img.onload = () => { cachedBgImg = img; showBgThumb(data.bgImage); };
-            } else {
-                alert('내용을 불러왔습니다.\n배경 이미지는 백업에 포함되지 않으므로 다시 선택해 주세요.');
-            }
-            setTimeout(() => { generateImages(); markSaved(); }, 50);
+            // 백업 파일에 배경 이미지는 포함되지 않으므로 안내 후 재선택 유도
+            alert('내용을 불러왔습니다.\n배경 이미지는 백업에 포함되지 않으므로 다시 선택해 주세요.');
+            generateImages();
+            markSaved();
         } catch(err) { alert('잘못된 백업 파일입니다.'); }
     };
     reader.readAsText(file);
@@ -1482,7 +1498,7 @@ function loadProject(event) {
  * 다운로드
  * ============================================================ */
 function downloadImages() {
-    if (!generatedImagesUrls.length) return alert('먼저 이미지를 생성해 주세요.');
+    if (!generatedImagesUrls.length) return showColorToast('먼저 섹션과 항목을 추가해 이미지를 생성해 주세요.');
     if (generatedImagesUrls.length === 1) {
         const a = document.createElement('a');
         a.href = generatedImagesUrls[0]; a.download = 'A4이벤트_01.jpg';
@@ -1734,6 +1750,8 @@ window.onload = () => {
         if (e.target.closest('.js-dup-section')) {
             saveSnapshot();
             const wrapper = e.target.closest('.section-title-wrapper');
+            const headerStyle = wrapper.querySelector('.section-header-style')?.value || 'filled';
+            const titleVal = wrapper.querySelector('.section-title-input')?.value || '';
             const items = [];
             let next = wrapper.nextElementSibling;
             while (next?.classList.contains('item-row')) {
@@ -1750,10 +1768,14 @@ window.onload = () => {
                 });
                 next = next.nextElementSibling;
             }
-            // 복제 삽입 (현재 섹션+아이템들 뒤)
-            const insertAfter = next ? next.previousElementSibling : container.lastElementChild;
-            addSectionTitle(wrapper.querySelector('.section-title-input')?.value || '');
-            items.forEach(item => addItemRow(item));
+            // next = 원본 섹션 직후의 비(非)아이템 노드. null이면 맨 끝.
+            // addSectionTitle/addItemRow 는 항상 끝에 추가하므로, 추가 후 올바른 위치로 이동.
+            addSectionTitle(titleVal, false, null, headerStyle);
+            if (next) container.insertBefore(container.lastElementChild, next);
+            items.forEach(item => {
+                addItemRow(item);
+                if (next) container.insertBefore(container.lastElementChild, next);
+            });
             return;
         }
         // 항목 삭제
@@ -1781,11 +1803,6 @@ window.onload = () => {
         // 컬럼 구분 삭제
         if (e.target.closest('.js-del-colbreak')) {
             saveSnapshot(); e.target.closest('.column-break-wrapper').remove();
-            refreshAccordionVisibility(); debouncedGenerateImages(); return;
-        }
-        // 페이지 구분 삭제
-        if (e.target.closest('.js-del-pagebreak')) {
-            saveSnapshot(); e.target.closest('.page-break-wrapper').remove();
             refreshAccordionVisibility(); debouncedGenerateImages(); return;
         }
         // 섹션 옵션 토글
@@ -1846,6 +1863,9 @@ window.onload = () => {
         if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
         if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveProject(); }
     });
+
+    // CSS 변수 --h1-bar-color 를 실제 초기 테마색과 일치시킴 (style.css 기본값과 다를 수 있음)
+    updateColorSync(document.getElementById('themeHex').value || '#000000');
 
     // 세션 복원 or 초기 상태
     const restored = restoreFromSessionStorage();

@@ -566,7 +566,7 @@ body {
    미리보기 카드
    ══════════════════════════════════════════ */
 .preview-card {
-    flex: 0 0 1030px; width: 1030px; padding: 20px;
+    flex: 1 1 0; min-width: 0; max-width: 1030px; padding: 20px;
     display: flex; flex-direction: column; gap: 12px;
     min-height: 600px;
 }
