@@ -1,8 +1,0 @@
-.gemini/
-.system_generated/
-.claude/
-*.tmp
-temp/
-node_modules/
-.DS_Store
-Thumbs.db
