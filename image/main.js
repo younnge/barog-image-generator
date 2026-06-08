@@ -68,6 +68,7 @@ function sanitizeId(id) {
     return id.replace(/[^a-zA-Z0-9\-]/g, '') || null;
 }
 function hexToRgba(hex, alpha) {
+    if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return `rgba(0,0,0,${alpha})`;
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
@@ -86,9 +87,7 @@ function checkMedicalLaw(text) {
         while ((foundAt = lowerText.indexOf(lower, searchFrom)) !== -1) {
             let isException = false;
             for (const { word: exWord, re } of EXCEPTION_REGEXES) {
-                re.lastIndex = 0; // 사전 컴파일된 /g 정규식은 lastIndex를 초기화해야 함
-                let match;
-                while ((match = re.exec(lowerText)) !== null) {
+                for (const match of lowerText.matchAll(re)) {
                     if (foundAt >= match.index && foundAt < match.index + exWord.length) { isException = true; break; }
                 }
                 if (isException) break;
@@ -166,12 +165,7 @@ function getSnapshot() {
                 type: 'item', id: undoId,
                 itemName: child.querySelector('.item-name')?.value || '',
                 isSublabel: child.querySelector('.item-sublabel')?.checked || false,
-                p1Label: child.querySelector('.price-label-1')?.value || '',
-                p1: child.querySelector('.price-val-1')?.value || '',
-                p2Label: child.querySelector('.price-label-2')?.value || '',
-                p2: child.querySelector('.price-val-2')?.value || '',
-                p3Label: child.querySelector('.price-label-3')?.value || '',
-                p3: child.querySelector('.price-val-3')?.value || '',
+                prices: readPriceSlots(child),
                 note: child.querySelector('.item-note-input')?.value || ''
             });
         } else if (child.classList.contains('section-title-wrapper')) {
@@ -179,7 +173,9 @@ function getSnapshot() {
                 type: 'sectionTitle', id: undoId,
                 value: child.querySelector('.section-title-input')?.value || '',
                 collapsed: child.classList.contains('collapsed'),
-                headerStyle: child.querySelector('.section-header-style')?.value || 'filled'
+                titleSize: parseInt(child.querySelector('.js-title-size-display')?.textContent) || 24,
+                bodySize: parseInt(child.querySelector('.js-body-size-display')?.textContent) || 20,
+                numSize: parseInt(child.querySelector('.js-num-size-display')?.textContent) || 35
             });
         } else if (child.classList.contains('column-break-wrapper')) {
             items.push({ type: 'columnBreak', id: undoId });
@@ -188,10 +184,12 @@ function getSnapshot() {
     return {
         topText: document.getElementById('topText')?.value || '',
         periodText: document.getElementById('periodText')?.value || '',
+        periodNote: document.getElementById('periodNote')?.value || '',
         textColor: document.getElementById('textColorHex')?.value || '#000000',
         themeColor: document.getElementById('themeHex')?.value || '#000000',
         numColor: document.getElementById('numColorHex')?.value || '#000000',
         headerHeight: document.getElementById('headerHeight')?.value || '28',
+        textScale: document.getElementById('textScale')?.value || '100',
         items
     };
 }
@@ -226,6 +224,7 @@ function restoreSnapshot(data) {
     if (!data) return;
     if (data.topText !== undefined) document.getElementById('topText').value = data.topText;
     if (data.periodText !== undefined) document.getElementById('periodText').value = data.periodText;
+    if (data.periodNote !== undefined) document.getElementById('periodNote').value = data.periodNote;
     if (data.textColor) updateTextColorSync(data.textColor);
     if (data.themeColor) updateColorSync(data.themeColor);
     if (data.numColor) updateNumColorSync(data.numColor);
@@ -233,7 +232,15 @@ function restoreSnapshot(data) {
         const sl = document.getElementById('headerHeight');
         sl.value = data.headerHeight;
         updateSliderBg(sl);
-        document.getElementById('headerHeightLabel').textContent = data.headerHeight + '%';
+        document.getElementById('headerHeightLabel').value = data.headerHeight;
+    }
+    if (data.textScale !== undefined) {
+        const sl = document.getElementById('textScale');
+        if (sl) {
+            sl.value = data.textScale;
+            updateSliderBg(sl);
+            document.getElementById('textScaleLabel').value = data.textScale;
+        }
     }
     const container = document.getElementById('itemsContainer');
     // innerHTML 교체 전 남아있는 위반 툴팁을 body에서 제거
@@ -241,7 +248,7 @@ function restoreSnapshot(data) {
     container.innerHTML = '';
     (data.items || []).forEach(item => {
         if (item.type === 'item') addItemRow(item);
-        else if (item.type === 'sectionTitle') addSectionTitle(item.value, item.collapsed, item.id, item.headerStyle);
+        else if (item.type === 'sectionTitle') addSectionTitle(item.value, item.collapsed, item.id, item.titleSize || 24, item.bodySize || 20, item.numSize || 35);
         else if (item.type === 'columnBreak') addColumnBreak(item.id);
     });
     document.querySelectorAll('.item-name, .section-title-input').forEach(el => updateViolationUI(el));
@@ -321,14 +328,13 @@ const BUILTIN_PRESETS = [];
 /* ============================================================
  * DOM 빌더
  * ============================================================ */
-function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, headerStyle = 'filled') {
+function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, titleSize = 24, bodySize = 20, numSize = 35) {
     const container = document.getElementById('itemsContainer');
     const wrapper = document.createElement('div');
     wrapper.className = 'section-title-wrapper' + (isCollapsed ? ' collapsed' : '');
     wrapper.setAttribute('data-undo-id', sanitizeId(undoId) || generateUniqueId('sec'));
     wrapper.innerHTML = `
         <div class="event-badge-wrapper">
-            <div class="event-badge">섹션</div>
             <span class="section-count-badge"></span>
             <div class="section-accordion-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
         </div>
@@ -339,6 +345,8 @@ function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, he
                     <textarea class="btn-input section-title-input auto-resize" placeholder="섹션 제목 (예: 보톡스 이벤트)">${escapeHtml(titleValue)}</textarea>
                     <div class="format-toolbar">
                         <button class="fmt-btn fmt-color" data-open="&lt;" data-close="&gt;" title="강조색 적용">강조</button>
+                        <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
+                        <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
                         <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
                     </div>
                 </div>
@@ -351,16 +359,32 @@ function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, he
         </div>
         <div class="section-opts-row">
             <div style="display:flex;flex-direction:column;gap:4px;flex:1;">
-                <span style="font-size:11px;font-weight:700;color:var(--primary);">헤더 바 스타일</span>
-                <select class="btn-input section-header-style" style="font-size:12px;padding:5px 8px;">
-                    <option value="filled">채우기 (기본)</option>
-                    <option value="outline">테두리만</option>
-                </select>
+                <span style="font-size:11px;font-weight:700;color:var(--primary);">제목 크기</span>
+                <div class="size-control-row">
+                    <button class="size-btn js-title-size-minus">−</button>
+                    <span class="size-value js-title-size-display">${titleSize}</span>
+                    <button class="size-btn js-title-size-plus">+</button>
+                </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;">
+                <span style="font-size:11px;font-weight:700;color:var(--primary);">본문 크기</span>
+                <div class="size-control-row">
+                    <button class="size-btn js-body-size-minus">−</button>
+                    <span class="size-value js-body-size-display">${bodySize}</span>
+                    <button class="size-btn js-body-size-plus">+</button>
+                </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;">
+                <span style="font-size:11px;font-weight:700;color:var(--primary);">금액 크기</span>
+                <div class="size-control-row">
+                    <button class="size-btn js-num-size-minus">−</button>
+                    <span class="size-value js-num-size-display">${numSize}</span>
+                    <button class="size-btn js-num-size-plus">+</button>
+                </div>
             </div>
         </div>
     `;
     container.appendChild(wrapper);
-    wrapper.querySelector('.section-header-style').value = headerStyle;
     initDragAndDrop(wrapper);
     wrapper.querySelector('.event-badge-wrapper').addEventListener('click', () => toggleSection(wrapper));
     setTimeout(() => autoResizeTextarea(wrapper.querySelector('.section-title-input')), 0);
@@ -368,12 +392,55 @@ function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, he
     debouncedGenerateImages();
 }
 
+function readPriceSlots(el) {
+    const slots = el.querySelectorAll('.price-slots-wrap .price-slot');
+    if (slots.length) return Array.from(slots).map((_, i) => ({
+        label: el.querySelector(`.price-label-${i+1}`)?.value || '',
+        val: el.querySelector(`.price-val-${i+1}`)?.value || ''
+    }));
+    // 구버전 p1/p2/p3 포맷 호환
+    const prices = [];
+    for (let i = 1; i <= 3; i++) {
+        const l = el.querySelector(`.price-label-${i}`)?.value || '';
+        const v = el.querySelector(`.price-val-${i}`)?.value || '';
+        if (l || v) prices.push({ label: l, val: v });
+    }
+    return prices;
+}
+
+function buildPriceSlotEl(n, label = '', val = '') {
+    const div = document.createElement('div');
+    div.className = 'price-slot';
+    div.innerHTML = `<input type="text" class="btn-input price-label-input price-label-${n}" placeholder="라벨" value="${escapeHtml(label)}"><input type="text" class="btn-input price-val-input price-val-${n}" placeholder="금액" value="${escapeHtml(val)}"><button class="btn-dup-price-slot js-dup-price-slot" title="슬롯 복제">${COPY_SVG}</button><button class="btn-remove-price-slot js-remove-price-slot" title="슬롯 삭제">−</button>`;
+    return div;
+}
+
+function renumberPriceSlots(row) {
+    row.querySelectorAll('.price-slots-wrap .price-slot').forEach((slot, i) => {
+        const n = i + 1;
+        const lbl = slot.querySelector('.price-label-input');
+        const val = slot.querySelector('.price-val-input');
+        lbl.className = `btn-input price-label-input price-label-${n}`;
+        val.className = `btn-input price-val-input price-val-${n}`;
+    });
+}
+
 function addItemRow(itemData = {}) {
-    const { itemName='', isSublabel=false, p1Label='', p1='', p2Label='', p2='', p3Label='', p3='', note='', id=null } = itemData;
-    const hasPrice = !!(p1 || p2 || p3 || p1Label || p2Label || p3Label || note);
+    const { itemName='', isSublabel=false, note='', id=null } = itemData;
+    // prices 배열 우선, 없으면 구버전 p1/p2/p3 호환
+    let prices = itemData.prices;
+    if (!prices) {
+        prices = [];
+        const { p1Label='', p1='', p2Label='', p2='', p3Label='', p3='' } = itemData;
+        if (p1Label || p1) prices.push({ label: p1Label, val: p1 });
+        if (p2Label || p2) prices.push({ label: p2Label, val: p2 });
+        if (p3Label || p3) prices.push({ label: p3Label, val: p3 });
+    }
+    if (!prices.length) prices = [{ label: '', val: '' }];
+
     const container = document.getElementById('itemsContainer');
     const row = document.createElement('div');
-    row.className = 'item-row' + (hasPrice ? ' item-expanded' : '');
+    row.className = 'item-row item-expanded';
     row.setAttribute('data-undo-id', sanitizeId(id) || generateUniqueId('item'));
     row.innerHTML = `
         <div class="item-row-top">
@@ -387,33 +454,30 @@ function addItemRow(itemData = {}) {
                     <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
                 </div>
             </div>
-            <button class="btn-expand-item js-expand-item" title="가격 입력 펼치기/접기">${EXPAND_SVG}</button>
-            <label class="sublabel-toggle" title="소제목 행으로 표시 (가격 없이 강조 행)">
-                <input type="checkbox" class="item-sublabel btn-input" ${isSublabel ? 'checked' : ''}>
-                <span>소제목</span>
-            </label>
+            <input type="checkbox" class="item-sublabel" style="display:none" ${isSublabel ? 'checked' : ''}>
+            <button class="btn-action-text js-toggle-sublabel${isSublabel ? ' btn-action-active' : ''}" title="소제목 행으로 표시 (가격 없이 강조 행)">소제목</button>
+            <button class="btn-action-text js-toggle-note${note ? ' btn-action-active' : ''}" title="비고 텍스트 추가">비고</button>
             <button class="btn-copy js-dup-item" title="복제">${COPY_SVG}</button>
             <button class="btn-remove js-del-item" title="삭제">${CLOSE_SVG}</button>
         </div>
         <div class="item-prices-row${isSublabel ? ' hidden' : ''}">
-            <div class="price-slot">
-                <input type="text" class="btn-input price-label-input price-label-1" placeholder="라벨(5회)" value="${escapeHtml(p1Label)}">
-                <input type="text" class="btn-input price-val-input price-val-1" placeholder="금액(20만원)" value="${escapeHtml(p1)}">
-            </div>
-            <div class="price-slot">
-                <input type="text" class="btn-input price-label-input price-label-2" placeholder="라벨" value="${escapeHtml(p2Label)}">
-                <input type="text" class="btn-input price-val-input price-val-2" placeholder="금액" value="${escapeHtml(p2)}">
-            </div>
-            <div class="price-slot">
-                <input type="text" class="btn-input price-label-input price-label-3" placeholder="라벨" value="${escapeHtml(p3Label)}">
-                <input type="text" class="btn-input price-val-input price-val-3" placeholder="금액" value="${escapeHtml(p3)}">
-            </div>
+            <div class="price-slots-wrap"></div>
+            <button class="btn-add-price-slot js-add-price-slot" title="가격 슬롯 추가">+</button>
+        </div>
+        <div class="item-note-row${note ? '' : ' hidden'}">
             <input type="text" class="btn-input item-note-input" placeholder="※ 비고 (작은글씨)" value="${escapeHtml(note)}">
         </div>
     `;
+    const slotsWrap = row.querySelector('.price-slots-wrap');
+    prices.forEach((p, i) => slotsWrap.appendChild(buildPriceSlotEl(i + 1, p.label, p.val)));
+    renumberPriceSlots(row);
+
     container.appendChild(row);
-    row.querySelector('.item-sublabel').addEventListener('change', function() {
-        row.querySelector('.item-prices-row').classList.toggle('hidden', this.checked);
+    row.querySelector('.js-toggle-sublabel').addEventListener('click', function() {
+        const checkbox = row.querySelector('.item-sublabel');
+        checkbox.checked = !checkbox.checked;
+        this.classList.toggle('btn-action-active', checkbox.checked);
+        row.querySelector('.item-prices-row').classList.toggle('hidden', checkbox.checked);
         debouncedGenerateImages();
         handleInputSnapshot();
     });
@@ -430,7 +494,7 @@ function addColumnBreak(undoId = null) {
     wrapper.setAttribute('data-undo-id', sanitizeId(undoId) || generateUniqueId('col'));
     wrapper.innerHTML = `
         <div class="drag-handle">${DRAG_SVG}</div>
-        <div class="column-break-line">↔ ─ ─ ─ ─ ─ 여기서 오른쪽 컬럼으로 분리 ─ ─ ─ ─ ─ ↔</div>
+        <div class="column-break-line">↔ 여기서 오른쪽 컬럼으로 분리 ↔</div>
         <button class="btn-remove js-del-colbreak" title="삭제">${CLOSE_SVG}</button>
     `;
     container.appendChild(wrapper);
@@ -441,13 +505,14 @@ function addColumnBreak(undoId = null) {
 
 
 function autoResizeTextarea(el) {
-    el.style.height = '32px';
+    el.style.height = '1px';
     el.style.height = Math.max(32, el.scrollHeight) + 'px';
 }
 
 function toggleSection(wrapper) {
     wrapper.classList.toggle('collapsed');
     refreshAccordionVisibility();
+    refreshBookmarks();
 }
 
 function refreshAccordionVisibility() {
@@ -480,6 +545,7 @@ function refreshAccordionVisibility() {
     });
     updateItemsEmptyState();
     updateColSplitHint();
+    refreshSectionGrouping();
 }
 
 function updateItemsEmptyState() {
@@ -514,20 +580,54 @@ function refreshBookmarks() {
     list.innerHTML = '';
 
     if (children.length === 0) {
+        list.classList.remove('bm-two-col');
         list.innerHTML = '<div class="bookmark-empty">항목을 추가하면<br>목차가 표시됩니다</div>';
         return;
     }
 
-    children.forEach(node => {
-        if (node.classList.contains('section-title-wrapper')) {
-            const title = node.querySelector('.section-title-input')?.value.trim() || '(제목 없음)';
-            const entry = document.createElement('div');
-            entry.className = 'bm-entry bm-section';
-            entry.textContent = title;
-            entry.addEventListener('click', () => scrollToItem(node));
-            list.appendChild(entry);
-        }
-    });
+    const hasColBreak = children.some(n => n.classList.contains('column-break-wrapper'));
+
+    function makeEntry(node) {
+        const title = node.querySelector('.section-title-input')?.value.trim() || '(제목 없음)';
+        const entry = document.createElement('div');
+        const isActive = !node.classList.contains('collapsed');
+        entry.className = 'bm-entry bm-section' + (isActive ? ' bm-active' : '');
+        entry.textContent = title;
+        entry.addEventListener('click', () => {
+            document.querySelectorAll('#itemsContainer .section-title-wrapper').forEach(s => {
+                s.classList.toggle('collapsed', s !== node);
+            });
+            refreshAccordionVisibility();
+            refreshBookmarks();
+            scrollToItem(node);
+        });
+        return entry;
+    }
+
+    if (hasColBreak) {
+        list.classList.add('bm-two-col');
+        const leftCol = document.createElement('div');
+        leftCol.className = 'bm-col';
+        const rightCol = document.createElement('div');
+        rightCol.className = 'bm-col';
+        let currentCol = leftCol;
+        children.forEach(node => {
+            if (node.classList.contains('column-break-wrapper')) {
+                currentCol = rightCol;
+            } else if (node.classList.contains('section-title-wrapper')) {
+                currentCol.appendChild(makeEntry(node));
+            }
+        });
+        list.appendChild(leftCol);
+        list.appendChild(rightCol);
+    } else {
+        list.classList.remove('bm-two-col');
+        children.forEach(node => {
+            if (node.classList.contains('section-title-wrapper')) {
+                list.appendChild(makeEntry(node));
+            }
+        });
+    }
 }
 
 function scrollToItem(el) {
@@ -536,7 +636,15 @@ function scrollToItem(el) {
         itemsTabBtn.click();
     }
     setTimeout(() => {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const scrollContainer = document.querySelector('.items-scroll');
+        if (scrollContainer) {
+            const containerTop = scrollContainer.getBoundingClientRect().top;
+            const elTop = el.getBoundingClientRect().top;
+            const targetScroll = scrollContainer.scrollTop + (elTop - containerTop) - 8;
+            scrollContainer.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+        } else {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
         el.classList.add('bm-highlight');
         setTimeout(() => el.classList.remove('bm-highlight'), 800);
     }, itemsTabBtn && !itemsTabBtn.classList.contains('active') ? 80 : 0);
@@ -555,12 +663,54 @@ function initBookmarkObserver() {
     });
 }
 
+function refreshSectionGrouping() {
+    const container = document.getElementById('itemsContainer');
+    const children = Array.from(container.children);
+
+    // 기존 그룹 클래스 초기화
+    children.forEach(el => el.classList.remove('section-group-item', 'section-group-last', 'section-group-empty'));
+
+    let n = 0;
+    for (let i = 0; i < children.length; i++) {
+        const el = children[i];
+        if (!el.classList.contains('section-title-wrapper')) continue;
+        n++;
+
+        // 번호 뱃지 삽입 또는 업데이트
+        const bw = el.querySelector('.event-badge-wrapper');
+        if (bw) {
+            let dot = bw.querySelector('.section-num-dot');
+            if (!dot) {
+                dot = document.createElement('span');
+                dot.className = 'section-num-dot';
+                bw.insertBefore(dot, bw.firstChild);
+            }
+            dot.textContent = '이벤트' + n;
+        }
+
+        // 그룹 내 보이는 항목 수집
+        const items = [];
+        for (let j = i + 1; j < children.length; j++) {
+            const nx = children[j];
+            if (nx.classList.contains('section-title-wrapper') || nx.classList.contains('column-break-wrapper')) break;
+            if (nx.classList.contains('item-row') && !nx.classList.contains('item-hidden')) items.push(nx);
+        }
+
+        if (items.length > 0) {
+            items.forEach(it => it.classList.add('section-group-item'));
+            items[items.length - 1].classList.add('section-group-last');
+        } else {
+            el.classList.add('section-group-empty');
+        }
+    }
+}
+
 function updateColSplitHint() {
     const container = document.getElementById('itemsContainer');
     const hint = document.getElementById('colSplitHint');
     if (!hint) return;
     const hasColBreak = Array.from(container.children).some(n => n.classList.contains('column-break-wrapper'));
-    hint.textContent = hasColBreak ? '' : '컬럼 구분 없으면 자동 2분할';
+    hint.textContent = hasColBreak ? '' : '컬럼 구분 없으면 1열 전체 너비';
 }
 
 /* ============================================================
@@ -779,16 +929,16 @@ function roundRect(ctx, x, y, w, h, r) {
 /* ============================================================
  * 섹션 높이 측정 (배경 위 카드 배경 그리기용 사전 계산)
  * ============================================================ */
-function measureItemRow(ctx, item, colW, fonts) {
+function measureItemRow(ctx, item, colW, fonts, bodySize = 20) {
     if (item.isSublabel) return 44;
-    const NAME_SIZE = 20, PAD_Y = 12, LINE_H = NAME_SIZE * 1.45, NOTE_SIZE = 17;
+    const NAME_SIZE = bodySize, PAD_Y = 12, LINE_H = NAME_SIZE * 1.45, NOTE_SIZE = 17;
     const nameLines = wrapStyledText(ctx, item.itemName, Math.floor(colW * 0.50), NAME_SIZE, false, fonts);
     const noteH = item.note ? (NOTE_SIZE * 1.5 + 2) : 0;
     return Math.max(Math.ceil(nameLines.length * LINE_H) + PAD_Y * 2 + noteH, 52);
 }
 function measureSection(ctx, sec, colW, fonts) {
-    let h = sec.title ? 40 : 0;
-    for (const item of sec.items) h += measureItemRow(ctx, item, colW, fonts);
+    let h = sec.title ? (sec.titleSize || 24) + 16 : 0;
+    for (const item of sec.items) h += measureItemRow(ctx, item, colW, fonts, sec.bodySize || 20);
     if (sec.items.length > 0) h += 1;
     return h;
 }
@@ -806,7 +956,7 @@ function collectSectionRects(ctx, sections, colX, startY, maxY, colW, fonts) {
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, leftSections, rightSections, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', hasColBreak = true) {
+function drawA4Canvas(bgImg, leftSections, rightSections, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', hasColBreak = true, periodNote = '') {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -881,6 +1031,16 @@ function drawA4Canvas(bgImg, leftSections, rightSections, headerRatio, themeColo
         }
     }
 
+    // 기간 우측 텍스트 (헤더 우측 끝, 기간 높이에 우측 정렬)
+    if (headerH > 0 && periodNote) {
+        ctx.fillStyle = textColor;
+        ctx.font = `400 18px ${fonts.main}`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.letterSpacing = '0px';
+        ctx.fillText(periodNote, W - MARGIN, headerH - 12);
+    }
+
 
     return canvas;
 }
@@ -899,7 +1059,7 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts) {
 
     // 섹션 헤더 바
     if (sec.title) {
-        const HEADER_H = 40;
+        const HEADER_H = (sec.titleSize || 24) + 16;
         const style = sec.headerStyle || 'filled';
         if (style === 'filled') {
             ctx.fillStyle = themeColor;
@@ -913,7 +1073,7 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts) {
             ctx.strokeRect(x + 1.5, y + 1.5, colW - 3, HEADER_H - 3);
             ctx.fillStyle = themeColor;
         }
-        ctx.font = `700 24px ${fonts.main}`;
+        ctx.font = `700 ${sec.titleSize || 24}px ${fonts.main}`;
         ctx.letterSpacing = '0px';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'alphabetic';
@@ -928,31 +1088,24 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts) {
     for (let i = 0; i < sec.items.length; i++) {
         const rowBg = i % 2 === 0 ? '#ffffff' : '#fafafa';
         const isLast = i === sec.items.length - 1;
-        y = drawItemRow(ctx, sec.items[i], x, y, colW, themeColor, numColor, rowBg, fonts, isLast);
+        const nextIsSublabel = !isLast && !!sec.items[i + 1]?.isSublabel;
+        y = drawItemRow(ctx, sec.items[i], x, y, colW, themeColor, numColor, rowBg, fonts, isLast || nextIsSublabel, sec.bodySize || 20, sec.numSize || 35);
     }
 
-    // 섹션 하단 테두리 + 좌우 세로선
+    // 섹션 아이템 영역 테두리 (4면 균일)
     if (sec.items.length > 0) {
-        ctx.fillStyle = hexToRgba(themeColor, 0.3);
-        ctx.fillRect(x, y, colW, 1);
+        ctx.strokeStyle = hexToRgba(themeColor, 0.5);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, itemsStartY, colW - 1, y - itemsStartY);
         y += 1;
-
-        ctx.strokeStyle = themeColor;
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(x + 0.25, itemsStartY);
-        ctx.lineTo(x + 0.25, y);
-        ctx.moveTo(x + colW - 0.25, itemsStartY);
-        ctx.lineTo(x + colW - 0.25, y);
-        ctx.stroke();
     }
 
     return y;
 }
 
-function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fonts, isLast = false) {
+function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35) {
     const PAD_X = 18, PAD_Y = 12;
-    const NAME_SIZE = 20, PRICE_SIZE = 28, NOTE_SIZE = 17;
+    const NAME_SIZE = bodySize, PRICE_SIZE = 28, NOTE_SIZE = 17;
     const LINE_H = NAME_SIZE * 1.45;
 
     // 소제목 행
@@ -976,9 +1129,12 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
         return startY + SL_H;
     }
 
+    // 가격 총 너비 측정 → 이름과 겹치면 스택 강제
+    const tiers = buildTiers(item);
+    const priceW = measurePriceTiersWidth(ctx, tiers, numSize, fonts);
     // 일반 항목: 50% 너비로 먼저 측정해 멀티라인 여부 판단
     const nameLines_check = wrapStyledText(ctx, item.itemName, Math.floor(colW * 0.50), NAME_SIZE, false, fonts);
-    const isStacked = nameLines_check.length > 1;
+    const isStacked = nameLines_check.length > 1 || (tiers.length > 0 && priceW > colW * 0.50 - PAD_X);
 
     // 스택 모드면 전체 너비로 재측정
     const nameMaxW = isStacked ? Math.floor(colW - PAD_X * 2) : Math.floor(colW * 0.50);
@@ -990,11 +1146,18 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
     const hasNote = !!item.note;
     const noteH = hasNote ? (NOTE_SIZE * 1.5 + 2) : 0;
     const PRICE_TIER_H = 35;
+    const PRICE_ROW_GAP = 6;
     const PRICE_GAP = 1;
+
+    // 스택 모드일 때 멀티행 계산
+    const priceAvailW = colW - PAD_X * 2;
+    const tierRows = (isStacked && tiers.length) ? packTierRows(ctx, tiers, priceAvailW, numSize, fonts) : [];
+    const numPriceRows = tierRows.length || 1;
+    const priceTotalH = tiers.length ? (numPriceRows * PRICE_TIER_H + (numPriceRows - 1) * PRICE_ROW_GAP) : PRICE_TIER_H;
 
     let rowH, priceCenterY, nameStartY;
     if (isStacked) {
-        rowH = PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + PRICE_TIER_H + PAD_Y + noteH;
+        rowH = PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + priceTotalH + PAD_Y + noteH;
         priceCenterY = startY + PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + PRICE_TIER_H / 2;
         nameStartY = startY + PAD_Y + LINE_H / 2;
     } else {
@@ -1037,7 +1200,12 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
 
     // 가격 티어
     const priceRightX = x + colW - PAD_X;
-    drawPriceTiers(ctx, item, priceRightX, priceCenterY, themeColor, numColor, PRICE_SIZE, fonts);
+    if (isStacked && tierRows.length > 0) {
+        const priceTopY = startY + PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP;
+        drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP);
+    } else {
+        drawPriceTiers(ctx, item, priceRightX, priceCenterY, themeColor, numColor, PRICE_SIZE, fonts, numSize);
+    }
 
     // 비고 텍스트 (우하단 작은 글씨)
     if (hasNote) {
@@ -1052,19 +1220,72 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
     return startY + rowH;
 }
 
+function buildTiers(item) {
+    const tiers = [];
+    if (item.prices?.length) {
+        item.prices.forEach(p => { if (p.label || p.val) tiers.push({ label: p.label, price: p.val }); });
+    } else {
+        if (item.p1 || item.p1Label) tiers.push({ label: item.p1Label, price: item.p1 });
+        if (item.p2 || item.p2Label) tiers.push({ label: item.p2Label, price: item.p2 });
+        if (item.p3 || item.p3Label) tiers.push({ label: item.p3Label, price: item.p3 });
+    }
+    return tiers;
+}
+
+function measureSingleTierWidth(ctx, tier, numSize, fonts) {
+    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = 13;
+    let w = 0;
+    if (tier.price) {
+        const { num, unit } = splitPriceText(tier.price);
+        if (unit) { ctx.letterSpacing = '0px'; ctx.font = `400 ${UNIT_SIZE}px ${fonts.main}`; w += ctx.measureText(unit).width + 2.5; }
+        if (num) { ctx.letterSpacing = '-1.5px'; ctx.font = `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}`; w += ctx.measureText(num).width; }
+        if (tier.label) w += 10;
+    }
+    if (tier.label) { ctx.font = `500 ${CHIP_LABEL_SIZE}px ${fonts.medium}`; w += ctx.measureText(tier.label).width + 18; }
+    return w;
+}
+
+function measurePriceTiersWidth(ctx, tiers, numSize, fonts) {
+    if (!tiers.length) return 0;
+    const TIER_GAP = 14;
+    return tiers.reduce((sum, t, i) => sum + measureSingleTierWidth(ctx, t, numSize, fonts) + (i < tiers.length - 1 ? TIER_GAP : 0), 0);
+}
+
+function packTierRows(ctx, tiers, maxW, numSize, fonts) {
+    const TIER_GAP = 14;
+    // 역방향으로 채워서 뒤집으면 첫 행이 적고 마지막 행이 많은 하단 집중 배치가 됨 (5개 → 2+3)
+    const reversed = [...tiers].reverse();
+    const rows = [[]];
+    let rowW = 0;
+    for (const tier of reversed) {
+        const tw = measureSingleTierWidth(ctx, tier, numSize, fonts);
+        const addW = rows[rows.length - 1].length > 0 ? tw + TIER_GAP : tw;
+        if (rows[rows.length - 1].length > 0 && rowW + addW > maxW) {
+            rows.push([tier]); rowW = tw;
+        } else {
+            rows[rows.length - 1].push(tier); rowW += addW;
+        }
+    }
+    return rows.filter(r => r.length > 0).reverse().map(row => row.reverse());
+}
+
 function splitPriceText(str) {
     const m = String(str || '').match(/^([\d,\.]+)(.*)/);
     return m ? { num: m[1], unit: m[2] || '' } : { num: '', unit: String(str || '') };
 }
 
-function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSize, fonts) {
+function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSize, fonts, numSize = 35) {
     const tiers = [];
-    if (item.p1 || item.p1Label) tiers.push({ label: item.p1Label, price: item.p1 });
-    if (item.p2 || item.p2Label) tiers.push({ label: item.p2Label, price: item.p2 });
-    if (item.p3 || item.p3Label) tiers.push({ label: item.p3Label, price: item.p3 });
+    if (item.prices?.length) {
+        item.prices.forEach(p => { if (p.label || p.val) tiers.push({ label: p.label, price: p.val }); });
+    } else {
+        if (item.p1 || item.p1Label) tiers.push({ label: item.p1Label, price: item.p1 });
+        if (item.p2 || item.p2Label) tiers.push({ label: item.p2Label, price: item.p2 });
+        if (item.p3 || item.p3Label) tiers.push({ label: item.p3Label, price: item.p3 });
+    }
     if (!tiers.length) return;
 
-    const NUM_SIZE = 35, UNIT_SIZE = 17, CHIP_LABEL_SIZE = 13;
+    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = 13;
     const CHIP_H = Math.round(CHIP_LABEL_SIZE * 2);
     const TIER_GAP = 14;
     let x = rightX;
@@ -1089,7 +1310,7 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
                 ctx.textBaseline = 'alphabetic';
                 ctx.fillStyle = '#111111';
                 ctx.fillText(unit, px, baselineY);
-                px -= uw + 0.5;
+                px -= uw + 2.5;
             }
             if (num) {
                 ctx.letterSpacing = '-1.5px';
@@ -1121,6 +1342,58 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
     }
 }
 
+function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fonts, numSize, TIER_H = 35, ROW_GAP = 6) {
+    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = 13;
+    const CHIP_H = Math.round(CHIP_LABEL_SIZE * 2);
+    const TIER_GAP = 14;
+
+    for (let ri = 0; ri < tierRows.length; ri++) {
+        const row = tierRows[ri];
+        const centerY = topY + ri * (TIER_H + ROW_GAP) + TIER_H / 2;
+
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}`;
+        const _nm = ctx.measureText('0');
+        const baselineY = centerY + (_nm.actualBoundingBoxAscent - _nm.actualBoundingBoxDescent) / 2;
+
+        let x = rightX;
+        ctx.letterSpacing = '-1.5px';
+        for (let i = row.length - 1; i >= 0; i--) {
+            const tier = row[i];
+            if (tier.price) {
+                const { num, unit } = splitPriceText(tier.price);
+                let px = x;
+                if (unit) {
+                    ctx.letterSpacing = '0px'; ctx.font = `400 ${UNIT_SIZE}px ${fonts.main}`;
+                    const uw = ctx.measureText(unit).width;
+                    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#111111';
+                    ctx.fillText(unit, px, baselineY); px -= uw + 2.5;
+                }
+                if (num) {
+                    ctx.letterSpacing = '-1.5px'; ctx.font = `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}`;
+                    const nw = ctx.measureText(num).width;
+                    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = numColor;
+                    ctx.fillText(num, px, baselineY); px -= nw;
+                }
+                x = px - (tier.label ? 10 : 0);
+            }
+            if (tier.label) {
+                ctx.font = `500 ${CHIP_LABEL_SIZE}px ${fonts.medium}`;
+                const lw = ctx.measureText(tier.label).width;
+                const chipW = lw + 18;
+                const chipX = x - chipW;
+                ctx.fillStyle = themeColor;
+                roundRect(ctx, chipX, centerY - CHIP_H / 2, chipW, CHIP_H, CHIP_H / 2);
+                ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(tier.label, chipX + chipW / 2, centerY);
+                x = chipX - (i > 0 ? TIER_GAP : 0);
+            } else if (i > 0) {
+                x -= TIER_GAP;
+            }
+        }
+    }
+}
+
 /* ============================================================
  * 이미지 생성 (DOM 파싱 → 캔버스)
  * ============================================================ */
@@ -1147,22 +1420,19 @@ function parseDomToPages() {
             }
             currentSection = {
                 title: node.querySelector('.section-title-input')?.value.trim() || '',
-                headerStyle: node.querySelector('.section-header-style')?.value || 'filled',
+                titleSize: parseInt(node.querySelector('.js-title-size-display')?.textContent) || 24,
+                bodySize: parseInt(node.querySelector('.js-body-size-display')?.textContent) || 20,
+                numSize: parseInt(node.querySelector('.js-num-size-display')?.textContent) || 35,
                 items: []
             };
         } else if (node.classList.contains('item-row')) {
             if (!currentSection) {
-                currentSection = { title: '', headerStyle: 'filled', items: [] };
+                currentSection = { title: '', titleSize: 24, bodySize: 20, numSize: 35, items: [] };
             }
             currentSection.items.push({
                 itemName: node.querySelector('.item-name')?.value || '',
                 isSublabel: node.querySelector('.item-sublabel')?.checked || false,
-                p1Label: node.querySelector('.price-label-1')?.value || '',
-                p1: node.querySelector('.price-val-1')?.value || '',
-                p2Label: node.querySelector('.price-label-2')?.value || '',
-                p2: node.querySelector('.price-val-2')?.value || '',
-                p3Label: node.querySelector('.price-label-3')?.value || '',
-                p3: node.querySelector('.price-val-3')?.value || '',
+                prices: readPriceSlots(node),
                 note: node.querySelector('.item-note-input')?.value || ''
             });
         }
@@ -1207,12 +1477,23 @@ function generateImages() {
     const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '28', 10)) / 100;
     const topText = document.getElementById('topText')?.value || '';
     const periodText = document.getElementById('periodText')?.value || '';
+    const periodNote = document.getElementById('periodNote')?.value || '';
     const textColor = document.getElementById('textColorHex')?.value || '#000000';
+    const textScale = (parseInt(document.getElementById('textScale')?.value || '100', 10)) / 100;
 
     requestAnimationFrame(() => {
-        pages.forEach(autoBalancePage); // 컬럼 구분선 없으면 자동 2분할
+        // 컬럼 구분선이 있을 때만 2컬럼, 없으면 전체 너비 1열로 렌더링
+        if (textScale !== 1) {
+            pages.forEach(page => {
+                [...page.leftSections, ...page.rightSections].forEach(sec => {
+                    sec.titleSize = Math.round((sec.titleSize || 24) * textScale);
+                    sec.bodySize  = Math.round((sec.bodySize  || 20) * textScale);
+                    sec.numSize   = Math.round((sec.numSize   || 35) * textScale);
+                });
+            });
+        }
         const canvases = pages.map(page =>
-            drawA4Canvas(cachedBgImg, page.leftSections, page.rightSections, headerRatio, themeColor, numColor, topText, periodText, textColor, page.hasColBreak)
+            drawA4Canvas(cachedBgImg, page.leftSections, page.rightSections, headerRatio, themeColor, numColor, topText, periodText, textColor, page.hasColBreak, periodNote)
         );
 
         generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -1468,6 +1749,9 @@ function hideBgThumb() {
  * ============================================================ */
 function saveProject() {
     const data = getSnapshot();
+    if (cachedBgImg?.src?.startsWith('data:')) {
+        data.bgImage = cachedBgImg.src;
+    }
     const now = new Date();
     const dateStr = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
     const timeStr = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
@@ -1484,10 +1768,16 @@ function loadProject(event) {
         try {
             const data = JSON.parse(e.target.result);
             restoreSnapshot(data);
-            // 백업 파일에 배경 이미지는 포함되지 않으므로 안내 후 재선택 유도
-            alert('내용을 불러왔습니다.\n배경 이미지는 백업에 포함되지 않으므로 다시 선택해 주세요.');
-            generateImages();
-            markSaved();
+            if (data.bgImage) {
+                const img = new Image();
+                img.src = data.bgImage;
+                img.onload = () => { cachedBgImg = img; showBgThumb(data.bgImage); generateImages(); markSaved(); };
+                showColorToast('불러오기 완료. 배경 이미지도 함께 복원되었습니다.');
+            } else {
+                showColorToast('불러오기 완료. 배경 이미지는 별도로 다시 선택해 주세요.');
+                generateImages();
+                markSaved();
+            }
         } catch(err) { alert('잘못된 백업 파일입니다.'); }
     };
     reader.readAsText(file);
@@ -1526,6 +1816,7 @@ function toggleAllSections() {
         node.classList.toggle('collapsed', isAllCollapsed);
     });
     refreshAccordionVisibility();
+    refreshBookmarks();
     saveSnapshot();
 }
 
@@ -1606,12 +1897,62 @@ window.onload = () => {
     // 슬라이더
     const slider = document.getElementById('headerHeight');
     slider.addEventListener('input', () => {
-        document.getElementById('headerHeightLabel').textContent = slider.value + '%';
+        document.getElementById('headerHeightLabel').value = slider.value;
         updateSliderBg(slider);
         debouncedGenerateImages();
         handleInputSnapshot();
     });
     updateSliderBg(slider);
+
+    const headerHeightInput = document.getElementById('headerHeightLabel');
+    headerHeightInput.addEventListener('input', () => {
+        let v = parseInt(headerHeightInput.value);
+        if (isNaN(v)) return;
+        v = Math.min(Math.max(v, 0), 55);
+        slider.value = v;
+        updateSliderBg(slider);
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
+    headerHeightInput.addEventListener('blur', () => {
+        let v = parseInt(headerHeightInput.value);
+        if (isNaN(v)) v = 28;
+        v = Math.min(Math.max(v, 0), 55);
+        headerHeightInput.value = v;
+        slider.value = v;
+        updateSliderBg(slider);
+        saveSnapshot();
+    });
+
+    // 전체 텍스트 크기 슬라이더
+    const textScaleSlider = document.getElementById('textScale');
+    textScaleSlider.addEventListener('input', () => {
+        document.getElementById('textScaleLabel').value = textScaleSlider.value;
+        updateSliderBg(textScaleSlider);
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
+    updateSliderBg(textScaleSlider);
+
+    const textScaleInput = document.getElementById('textScaleLabel');
+    textScaleInput.addEventListener('input', () => {
+        let v = parseInt(textScaleInput.value);
+        if (isNaN(v)) return;
+        v = Math.min(Math.max(v, 70), 150);
+        textScaleSlider.value = v;
+        updateSliderBg(textScaleSlider);
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
+    textScaleInput.addEventListener('blur', () => {
+        let v = parseInt(textScaleInput.value);
+        if (isNaN(v)) v = 100;
+        v = Math.min(Math.max(v, 70), 150);
+        textScaleInput.value = v;
+        textScaleSlider.value = v;
+        updateSliderBg(textScaleSlider);
+        saveSnapshot();
+    });
 
     // 텍스트 색상 피커
     const textColorPicker = document.getElementById('textColorPicker');
@@ -1651,6 +1992,12 @@ window.onload = () => {
     periodInput.addEventListener('input', () => { debouncedGenerateImages(); handleInputSnapshot(); });
     periodInput.addEventListener('focus', () => { periodInput._before = periodInput.value; });
     periodInput.addEventListener('blur', () => { if (periodInput._before !== periodInput.value) saveSnapshot(); });
+
+    // 기간 우측 텍스트
+    const periodNoteInput = document.getElementById('periodNote');
+    periodNoteInput.addEventListener('input', () => { debouncedGenerateImages(); handleInputSnapshot(); });
+    periodNoteInput.addEventListener('focus', () => { periodNoteInput._before = periodNoteInput.value; });
+    periodNoteInput.addEventListener('blur', () => { if (periodNoteInput._before !== periodNoteInput.value) saveSnapshot(); });
 
 
     // 배경 이미지
@@ -1733,10 +2080,35 @@ window.onload = () => {
         if (e.target.matches('.btn-input')) setTimeout(() => { updateViolationUI(e.target); saveSnapshot(); }, 0);
     });
     container.addEventListener('click', e => {
-        // 아이템 가격 펼치기/접기
-        if (e.target.closest('.js-expand-item')) {
-            e.target.closest('.item-row').classList.toggle('item-expanded');
-            return;
+        // 가격 슬롯 추가
+        if (e.target.closest('.js-add-price-slot')) {
+            const row = e.target.closest('.item-row');
+            const wrap = row.querySelector('.price-slots-wrap');
+            wrap.appendChild(buildPriceSlotEl(wrap.querySelectorAll('.price-slot').length + 1, '', ''));
+            renumberPriceSlots(row);
+            debouncedGenerateImages(); handleInputSnapshot(); return;
+        }
+        // 가격 슬롯 복제
+        if (e.target.closest('.js-dup-price-slot')) {
+            const slot = e.target.closest('.price-slot');
+            const row = e.target.closest('.item-row');
+            const wrap = row.querySelector('.price-slots-wrap');
+            const label = slot.querySelector('.price-label-input')?.value || '';
+            const val = slot.querySelector('.price-val-input')?.value || '';
+            const newSlot = buildPriceSlotEl(wrap.querySelectorAll('.price-slot').length + 1, label, val);
+            slot.insertAdjacentElement('afterend', newSlot);
+            renumberPriceSlots(row);
+            debouncedGenerateImages(); handleInputSnapshot(); return;
+        }
+        // 가격 슬롯 삭제
+        if (e.target.closest('.js-remove-price-slot')) {
+            const row = e.target.closest('.item-row');
+            const wrap = row.querySelector('.price-slots-wrap');
+            if (wrap.querySelectorAll('.price-slot').length > 1) {
+                e.target.closest('.price-slot').remove();
+                renumberPriceSlots(row);
+            }
+            debouncedGenerateImages(); handleInputSnapshot(); return;
         }
         // 섹션 삭제
         if (e.target.closest('.js-del-section')) {
@@ -1750,32 +2122,30 @@ window.onload = () => {
         if (e.target.closest('.js-dup-section')) {
             saveSnapshot();
             const wrapper = e.target.closest('.section-title-wrapper');
-            const headerStyle = wrapper.querySelector('.section-header-style')?.value || 'filled';
             const titleVal = wrapper.querySelector('.section-title-input')?.value || '';
+            const dupTitleSize = parseInt(wrapper.querySelector('.js-title-size-display')?.textContent) || 24;
+            const dupBodySize = parseInt(wrapper.querySelector('.js-body-size-display')?.textContent) || 20;
+            const dupNumSize = parseInt(wrapper.querySelector('.js-num-size-display')?.textContent) || 35;
             const items = [];
             let next = wrapper.nextElementSibling;
             while (next?.classList.contains('item-row')) {
                 items.push({
                     itemName: next.querySelector('.item-name')?.value || '',
                     isSublabel: next.querySelector('.item-sublabel')?.checked || false,
-                    p1Label: next.querySelector('.price-label-1')?.value || '',
-                    p1: next.querySelector('.price-val-1')?.value || '',
-                    p2Label: next.querySelector('.price-label-2')?.value || '',
-                    p2: next.querySelector('.price-val-2')?.value || '',
-                    p3Label: next.querySelector('.price-label-3')?.value || '',
-                    p3: next.querySelector('.price-val-3')?.value || '',
+                    prices: readPriceSlots(next),
                     note: next.querySelector('.item-note-input')?.value || ''
                 });
                 next = next.nextElementSibling;
             }
             // next = 원본 섹션 직후의 비(非)아이템 노드. null이면 맨 끝.
             // addSectionTitle/addItemRow 는 항상 끝에 추가하므로, 추가 후 올바른 위치로 이동.
-            addSectionTitle(titleVal, false, null, headerStyle);
+            addSectionTitle(titleVal, false, null, dupTitleSize, dupBodySize, dupNumSize);
             if (next) container.insertBefore(container.lastElementChild, next);
             items.forEach(item => {
                 addItemRow(item);
                 if (next) container.insertBefore(container.lastElementChild, next);
             });
+            refreshAccordionVisibility();
             return;
         }
         // 항목 삭제
@@ -1788,17 +2158,16 @@ window.onload = () => {
         if (e.target.closest('.js-dup-item')) {
             saveSnapshot();
             const row = e.target.closest('.item-row');
+            const nextSibling = row.nextElementSibling;
             addItemRow({
                 itemName: row.querySelector('.item-name')?.value || '',
                 isSublabel: row.querySelector('.item-sublabel')?.checked || false,
-                p1Label: row.querySelector('.price-label-1')?.value || '',
-                p1: row.querySelector('.price-val-1')?.value || '',
-                p2Label: row.querySelector('.price-label-2')?.value || '',
-                p2: row.querySelector('.price-val-2')?.value || '',
-                p3Label: row.querySelector('.price-label-3')?.value || '',
-                p3: row.querySelector('.price-val-3')?.value || '',
+                prices: readPriceSlots(row),
                 note: row.querySelector('.item-note-input')?.value || ''
-            }); return;
+            });
+            if (nextSibling) container.insertBefore(container.lastElementChild, nextSibling);
+            refreshAccordionVisibility();
+            return;
         }
         // 컬럼 구분 삭제
         if (e.target.closest('.js-del-colbreak')) {
@@ -1810,9 +2179,45 @@ window.onload = () => {
             const row = e.target.closest('.section-title-wrapper')?.querySelector('.section-opts-row');
             if (row) row.classList.toggle('open');
         }
+        // 비고 드롭다운 토글
+        if (e.target.closest('.js-toggle-note')) {
+            const btn = e.target.closest('.js-toggle-note');
+            const itemRow = btn.closest('.item-row');
+            const noteRow = itemRow.querySelector('.item-note-row');
+            const isNowHidden = noteRow.classList.toggle('hidden');
+            btn.classList.toggle('btn-action-active', !isNowHidden);
+            if (!isNowHidden) noteRow.querySelector('.item-note-input').focus();
+            return;
+        }
     });
-    container.addEventListener('change', e => {
-        if (e.target.matches('.section-header-style')) { debouncedGenerateImages(); saveSnapshot(); }
+    container.addEventListener('click', e => {
+        const isTitleMinus = e.target.closest('.js-title-size-minus');
+        const isTitlePlus  = e.target.closest('.js-title-size-plus');
+        const isBodyMinus  = e.target.closest('.js-body-size-minus');
+        const isBodyPlus   = e.target.closest('.js-body-size-plus');
+        if (isTitleMinus || isTitlePlus) {
+            const display = e.target.closest('.section-title-wrapper').querySelector('.js-title-size-display');
+            let val = parseInt(display.textContent) || 24;
+            val = Math.min(Math.max(val + (isTitlePlus ? 1 : -1), 14), 40);
+            display.textContent = val;
+            debouncedGenerateImages(); saveSnapshot();
+        }
+        if (isBodyMinus || isBodyPlus) {
+            const display = e.target.closest('.section-title-wrapper').querySelector('.js-body-size-display');
+            let val = parseInt(display.textContent) || 20;
+            val = Math.min(Math.max(val + (isBodyPlus ? 1 : -1), 12), 32);
+            display.textContent = val;
+            debouncedGenerateImages(); saveSnapshot();
+        }
+        const isNumMinus = e.target.closest('.js-num-size-minus');
+        const isNumPlus  = e.target.closest('.js-num-size-plus');
+        if (isNumMinus || isNumPlus) {
+            const display = e.target.closest('.section-title-wrapper').querySelector('.js-num-size-display');
+            let val = parseInt(display.textContent) || 35;
+            val = Math.min(Math.max(val + (isNumPlus ? 1 : -1), 20), 60);
+            display.textContent = val;
+            debouncedGenerateImages(); saveSnapshot();
+        }
     });
 
     // 색상 프리셋
@@ -1856,6 +2261,13 @@ window.onload = () => {
     document.getElementById('remoteSaveBtn').addEventListener('click', saveProject);
     document.getElementById('remoteLoadBtn').addEventListener('click', () => document.getElementById('loadFileInput').click());
     document.getElementById('loadFileInput').addEventListener('change', loadProject);
+    document.getElementById('remoteGoTop').addEventListener('click', () => {
+        document.querySelector('.items-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    document.getElementById('remoteGoBottom').addEventListener('click', () => {
+        const el = document.querySelector('.items-scroll');
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    });
 
     // 단축키
     document.addEventListener('keydown', e => {
@@ -1888,4 +2300,81 @@ window.onload = () => {
     }
     initBookmarkObserver();
     refreshBookmarks();
+
+    // ── 컬럼 삽입 호버 버튼 ──
+    const colInsertBtn = document.createElement('button');
+    colInsertBtn.id = 'colInsertBtn';
+    colInsertBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><polyline points="8 7 3 12 8 17"/><polyline points="16 7 21 12 16 17"/></svg> 여기서 컬럼 분리`;
+    document.body.appendChild(colInsertBtn);
+
+    function canInsertColBreakBefore(el) {
+        let prev = el.previousElementSibling;
+        while (prev && prev.classList.contains('items-empty-hint')) prev = prev.previousElementSibling;
+        if (!prev) return false;
+        if (prev.classList.contains('column-break-wrapper')) return false;
+        return true;
+    }
+
+    let _colBtnTarget = null;
+    let _colBtnHideTimer = null;
+    let _colBtnHoveredSection = null;
+
+    function showColInsertBtn(section) {
+        clearTimeout(_colBtnHideTimer);
+        const rect = section.getBoundingClientRect();
+        const moveMode = Array.from(document.getElementById('itemsContainer').children)
+            .some(n => n.classList.contains('column-break-wrapper'));
+        if (moveMode) {
+            colInsertBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/></svg> 여기로 컬럼 이동`;
+            colInsertBtn.classList.add('move-mode');
+        } else {
+            colInsertBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><polyline points="8 7 3 12 8 17"/><polyline points="16 7 21 12 16 17"/></svg> 여기서 컬럼 분리`;
+            colInsertBtn.classList.remove('move-mode');
+        }
+        colInsertBtn.style.top = Math.max(8, rect.top - 14) + 'px';
+        colInsertBtn.style.left = (rect.left + rect.width / 2) + 'px';
+        colInsertBtn.classList.add('visible');
+        _colBtnTarget = section;
+    }
+
+    function hideColInsertBtn() {
+        colInsertBtn.classList.remove('visible');
+        _colBtnTarget = null;
+        _colBtnHoveredSection = null;
+    }
+
+    container.addEventListener('mouseover', e => {
+        const section = e.target.closest('.section-title-wrapper');
+        if (section === _colBtnHoveredSection) return;
+        _colBtnHoveredSection = section;
+        clearTimeout(_colBtnHideTimer);
+        if (!section || !canInsertColBreakBefore(section)) {
+            _colBtnHideTimer = setTimeout(hideColInsertBtn, 150);
+            return;
+        }
+        showColInsertBtn(section);
+    });
+
+    container.addEventListener('mouseleave', () => {
+        _colBtnHoveredSection = null;
+        _colBtnHideTimer = setTimeout(hideColInsertBtn, 150);
+    });
+
+    document.querySelector('.items-scroll')?.addEventListener('scroll', hideColInsertBtn);
+
+    colInsertBtn.addEventListener('mouseenter', () => clearTimeout(_colBtnHideTimer));
+    colInsertBtn.addEventListener('mouseleave', () => {
+        _colBtnHideTimer = setTimeout(hideColInsertBtn, 150);
+    });
+    colInsertBtn.addEventListener('click', () => {
+        if (!_colBtnTarget) return;
+        saveSnapshot();
+        const c = document.getElementById('itemsContainer');
+        // 기존 컬럼 구분이 있으면 먼저 제거 (이동 모드)
+        const existingBreak = c.querySelector('.column-break-wrapper');
+        if (existingBreak) existingBreak.remove();
+        addColumnBreak();
+        c.insertBefore(c.lastElementChild, _colBtnTarget);
+        hideColInsertBtn();
+    });
 };

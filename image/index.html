@@ -23,7 +23,7 @@
     <div class="container">
         <!-- ===== 북마크 패널 ===== -->
         <div class="bookmark-panel glass-card" id="bookmarkPanel">
-            <div class="bookmark-panel-head">목차</div>
+            <div class="bookmark-panel-head">북마크</div>
             <div class="bookmark-list" id="bookmarkList">
                 <div class="bookmark-empty">항목을 추가하면<br>목차가 표시됩니다</div>
             </div>
@@ -34,7 +34,7 @@
 
             <!-- 카드 헤드: 타이틀 + 탭 -->
             <div class="input-card-head">
-                <h1>A4 이벤트 생성기</h1>
+                <h1>원내이미지 생성기</h1>
                 <div class="tab-bar">
                     <button class="tab-btn active" data-tab="design">
                         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
@@ -60,11 +60,6 @@
                         </label>
                         <input type="file" id="bgInput" accept="image/*">
                     </div>
-                    <div class="label-with-tip" style="margin-top:8px;">
-                        <span class="label-text">헤더 높이</span>
-                        <span class="label-tip" id="headerHeightLabel">28%</span>
-                    </div>
-                    <input type="range" id="headerHeight" min="0" max="55" value="28" step="1" class="slider-input">
                 </div>
 
                 <div class="design-group">
@@ -88,16 +83,6 @@
                 </div>
 
                 <div class="design-group">
-                    <div class="design-group-label">제목</div>
-                    <input type="text" id="topText" class="btn-input" placeholder="예) 바로그 강남점 5월 이벤트" value="">
-                </div>
-
-                <div class="design-group">
-                    <div class="design-group-label">이벤트 기간</div>
-                    <input type="text" id="periodText" class="btn-input" placeholder="예) 2026.05.01 - 2026.05.31 | 부가세 별도" value="">
-                </div>
-
-                <div class="design-group">
                     <div class="design-group-label">텍스트 색상 <span class="design-group-hint">상단·기간 공통</span></div>
                     <div class="color-input-row">
                         <div class="color-swatch" id="textColorSwatch" style="background:#000000;"></div>
@@ -105,6 +90,37 @@
                         <input type="text" id="textColorHex" class="btn-input hex-input" value="#000000" maxlength="7">
                     </div>
                     <div id="textColorPresets" class="color-presets-wrap"></div>
+                </div>
+
+                <div class="design-group">
+                    <div class="design-group-label">제목</div>
+                    <input type="text" id="topText" class="btn-input" placeholder="예) 바로그 강남점 5월 이벤트" value="">
+                </div>
+
+                <div class="design-group">
+                    <div class="design-group-label">이벤트 기간</div>
+                    <input type="text" id="periodText" class="btn-input" placeholder="예) 2026.05.01 - 2026.05.31" value="">
+                </div>
+
+                <div class="design-group">
+                    <div class="design-group-label">기간 우측 텍스트</div>
+                    <input type="text" id="periodNote" class="btn-input" placeholder="예) 부가세 별도" value="">
+                </div>
+
+                <div class="design-group">
+                    <div class="label-with-tip">
+                        <span class="label-text">헤더 높이</span>
+                        <span class="label-tip-wrap"><input type="number" id="headerHeightLabel" class="label-tip-input" min="0" max="55" step="1" value="28"><span class="label-tip-unit">%</span></span>
+                    </div>
+                    <input type="range" id="headerHeight" min="0" max="55" value="28" step="1" class="slider-input">
+                </div>
+
+                <div class="design-group">
+                    <div class="label-with-tip">
+                        <span class="label-text">전체 텍스트 크기</span>
+                        <span class="label-tip-wrap"><input type="number" id="textScaleLabel" class="label-tip-input" min="70" max="150" step="5" value="100"><span class="label-tip-unit">%</span></span>
+                    </div>
+                    <input type="range" id="textScale" min="70" max="150" value="100" step="5" class="slider-input">
                 </div>
 
             </div>
@@ -175,6 +191,13 @@
         </button>
         <button class="rbtn" id="remoteLoadBtn" title="백업 불러오기">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </button>
+        <div class="remote-divider"></div>
+        <button class="rbtn" id="remoteGoTop" title="항목 맨 위로">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+        </button>
+        <button class="rbtn" id="remoteGoBottom" title="항목 맨 아래로">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
         </button>
         <input type="file" id="loadFileInput" accept=".json" style="display:none">
     </div>
