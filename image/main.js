@@ -1086,7 +1086,7 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts) {
     // 아이템 행
     const itemsStartY = y;
     for (let i = 0; i < sec.items.length; i++) {
-        const rowBg = i % 2 === 0 ? '#ffffff' : '#fafafa';
+        const rowBg = '#ffffff';
         const isLast = i === sec.items.length - 1;
         const nextIsSublabel = !isLast && !!sec.items[i + 1]?.isSublabel;
         y = drawItemRow(ctx, sec.items[i], x, y, colW, themeColor, numColor, rowBg, fonts, isLast || nextIsSublabel, sec.bodySize || 20, sec.numSize || 35);
