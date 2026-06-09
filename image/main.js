@@ -175,7 +175,8 @@ function getSnapshot() {
                 collapsed: child.classList.contains('collapsed'),
                 titleSize: parseInt(child.querySelector('.js-title-size-display')?.textContent) || 24,
                 bodySize: parseInt(child.querySelector('.js-body-size-display')?.textContent) || 20,
-                numSize: parseInt(child.querySelector('.js-num-size-display')?.textContent) || 35
+                numSize: parseInt(child.querySelector('.js-num-size-display')?.textContent) || 35,
+                isFullWidth: child.dataset.fullWidth === 'true'
             });
         } else if (child.classList.contains('column-break-wrapper')) {
             items.push({ type: 'columnBreak', id: undoId });
@@ -248,7 +249,7 @@ function restoreSnapshot(data) {
     container.innerHTML = '';
     (data.items || []).forEach(item => {
         if (item.type === 'item') addItemRow(item);
-        else if (item.type === 'sectionTitle') addSectionTitle(item.value, item.collapsed, item.id, item.titleSize || 24, item.bodySize || 20, item.numSize || 35);
+        else if (item.type === 'sectionTitle') addSectionTitle(item.value, item.collapsed, item.id, item.titleSize || 24, item.bodySize || 20, item.numSize || 35, !!item.isFullWidth);
         else if (item.type === 'columnBreak') addColumnBreak(item.id);
     });
     document.querySelectorAll('.item-name, .section-title-input').forEach(el => updateViolationUI(el));
@@ -328,11 +329,12 @@ const BUILTIN_PRESETS = [];
 /* ============================================================
  * DOM 빌더
  * ============================================================ */
-function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, titleSize = 24, bodySize = 20, numSize = 35) {
+function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, titleSize = 24, bodySize = 20, numSize = 35, isFullWidth = false) {
     const container = document.getElementById('itemsContainer');
     const wrapper = document.createElement('div');
     wrapper.className = 'section-title-wrapper' + (isCollapsed ? ' collapsed' : '');
     wrapper.setAttribute('data-undo-id', sanitizeId(undoId) || generateUniqueId('sec'));
+    wrapper.dataset.fullWidth = isFullWidth ? 'true' : 'false';
     wrapper.innerHTML = `
         <div class="event-badge-wrapper">
             <span class="section-count-badge"></span>
@@ -380,6 +382,13 @@ function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, ti
                     <button class="size-btn js-num-size-minus">−</button>
                     <span class="size-value js-num-size-display">${numSize}</span>
                     <button class="size-btn js-num-size-plus">+</button>
+                </div>
+            </div>
+            <div class="layout-toggle-row">
+                <span style="font-size:11px;font-weight:700;color:var(--primary);">레이아웃</span>
+                <div style="display:flex;gap:4px;">
+                    <button class="layout-btn js-layout-split${!isFullWidth ? ' layout-btn-active' : ''}" title="2열 배치">2열</button>
+                    <button class="layout-btn js-layout-full${isFullWidth ? ' layout-btn-active' : ''}" title="전체 너비">전체폭</button>
                 </div>
             </div>
         </div>
@@ -956,7 +965,7 @@ function collectSectionRects(ctx, sections, colX, startY, maxY, colW, fonts) {
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, leftSections, rightSections, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', hasColBreak = true, periodNote = '') {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '') {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -988,18 +997,36 @@ function drawA4Canvas(bgImg, leftSections, rightSections, headerRatio, themeColo
     const contentBottom = H - MARGIN;
     const COL_GAP = 15;
     const twoColW = Math.floor((W - MARGIN * 2 - COL_GAP) / 2);
-
-    // 컬럼 구분선이 없으면 단일 전체너비 중앙 컬럼
+    const fullW = W - MARGIN * 2;
     const col1X = MARGIN;
-    const col1W = hasColBreak ? twoColW : (W - MARGIN * 2);
     const col2X = MARGIN + twoColW + COL_GAP;
-    const col2W = twoColW;
 
-    // 섹션 카드 흰색 배경 + 박스 그림자
-    const sectionRects = [
-        ...collectSectionRects(ctx, leftSections, col1X, contentTop, contentBottom, col1W, fonts),
-        ...(hasColBreak ? collectSectionRects(ctx, rightSections, col2X, contentTop, contentBottom, col2W, fonts) : []),
-    ];
+    // 섹션 카드 흰색 배경 + 박스 그림자 (rows 기반)
+    const sectionRects = [];
+    let _y = contentTop;
+    for (const row of rows) {
+        if (_y >= contentBottom) break;
+        if (row.type === 'full') {
+            const h = measureSection(ctx, row.section, fullW, fonts);
+            sectionRects.push({ x: col1X, y: _y, w: fullW, h: Math.min(h, contentBottom - _y) });
+            _y += h + 15;
+        } else {
+            let leftY = _y, rightY = _y;
+            for (const sec of row.left) {
+                if (leftY >= contentBottom) break;
+                const h = measureSection(ctx, sec, twoColW, fonts);
+                sectionRects.push({ x: col1X, y: leftY, w: twoColW, h: Math.min(h, contentBottom - leftY) });
+                leftY += h + 15;
+            }
+            for (const sec of row.right) {
+                if (rightY >= contentBottom) break;
+                const h = measureSection(ctx, sec, twoColW, fonts);
+                sectionRects.push({ x: col2X, y: rightY, w: twoColW, h: Math.min(h, contentBottom - rightY) });
+                rightY += h + 15;
+            }
+            _y = Math.max(leftY, rightY);
+        }
+    }
     ctx.fillStyle = '#ffffff';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.09)';
     ctx.shadowBlur = 14;
@@ -1011,9 +1038,19 @@ function drawA4Canvas(bgImg, leftSections, rightSections, headerRatio, themeColo
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
 
-    drawColumnSections(ctx, leftSections, col1X, contentTop, contentBottom, col1W, themeColor, numColor, fonts);
-    if (hasColBreak) {
-        drawColumnSections(ctx, rightSections, col2X, contentTop, contentBottom, col2W, themeColor, numColor, fonts);
+    // rows 기반 렌더링
+    let y = contentTop;
+    for (const row of rows) {
+        if (y >= contentBottom) break;
+        if (row.type === 'full') {
+            y = drawSection(ctx, row.section, col1X, y, fullW, themeColor, numColor, fonts) + 15;
+        } else {
+            const ly = drawColumnSections(ctx, row.left, col1X, y, contentBottom, twoColW, themeColor, numColor, fonts);
+            const ry = row.right.length
+                ? drawColumnSections(ctx, row.right, col2X, y, contentBottom, twoColW, themeColor, numColor, fonts)
+                : y;
+            y = Math.max(ly, ry);
+        }
     }
 
     // 제목 + 이벤트 기간 (헤더 중앙, 두 줄)
@@ -1052,6 +1089,7 @@ function drawColumnSections(ctx, sections, colX, startY, maxY, colW, themeColor,
         y = drawSection(ctx, sec, colX, y, colW, themeColor, numColor, fonts);
         y += 15;
     }
+    return y;
 }
 
 function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts) {
@@ -1399,35 +1437,57 @@ function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fo
  * ============================================================ */
 function parseDomToPages() {
     const pages = [];
-    let currentPage = { leftSections: [], rightSections: [], hasColBreak: false };
+
+    function getPage() {
+        if (!pages.length) pages.push({ rows: [] });
+        return pages[pages.length - 1];
+    }
+
+    let currentSplit = null; // { type:'split', left:[], right:[] }
     let currentSide = 'left';
     let currentSection = null;
+
+    function flushSection() {
+        if (!currentSection || (!currentSection.title && !currentSection.items.length)) return;
+        if (currentSection.isFullWidth) {
+            flushSplit();
+            getPage().rows.push({ type: 'full', section: currentSection });
+        } else {
+            if (!currentSplit) currentSplit = { type: 'split', left: [], right: [] };
+            currentSplit[currentSide].push(currentSection);
+        }
+        currentSection = null;
+    }
+
+    function flushSplit() {
+        if (!currentSplit) return;
+        if (currentSplit.left.length || currentSplit.right.length) {
+            getPage().rows.push(currentSplit);
+        }
+        currentSplit = null;
+        currentSide = 'left';
+    }
 
     const children = Array.from(document.getElementById('itemsContainer').children)
         .filter(n => !n.classList.contains('items-empty-hint'));
 
     for (const node of children) {
         if (node.classList.contains('column-break-wrapper')) {
-            if (currentSection && (currentSection.title || currentSection.items.length)) {
-                currentPage.leftSections.push(currentSection);
-                currentSection = null;
-            }
+            flushSection();
             currentSide = 'right';
-            currentPage.hasColBreak = true;
         } else if (node.classList.contains('section-title-wrapper')) {
-            if (currentSection && (currentSection.title || currentSection.items.length)) {
-                currentPage[currentSide + 'Sections'].push(currentSection);
-            }
+            flushSection();
             currentSection = {
                 title: node.querySelector('.section-title-input')?.value.trim() || '',
                 titleSize: parseInt(node.querySelector('.js-title-size-display')?.textContent) || 24,
                 bodySize: parseInt(node.querySelector('.js-body-size-display')?.textContent) || 20,
                 numSize: parseInt(node.querySelector('.js-num-size-display')?.textContent) || 35,
+                isFullWidth: node.dataset.fullWidth === 'true',
                 items: []
             };
         } else if (node.classList.contains('item-row')) {
             if (!currentSection) {
-                currentSection = { title: '', titleSize: 24, bodySize: 20, numSize: 35, items: [] };
+                currentSection = { title: '', titleSize: 24, bodySize: 20, numSize: 35, isFullWidth: false, items: [] };
             }
             currentSection.items.push({
                 itemName: node.querySelector('.item-name')?.value || '',
@@ -1438,28 +1498,24 @@ function parseDomToPages() {
         }
     }
 
-    // 마지막 섹션/페이지 처리
-    if (currentSection && (currentSection.title || currentSection.items.length)) {
-        currentPage[currentSide + 'Sections'].push(currentSection);
-    }
-    const hasContent = currentPage.leftSections.length > 0 || currentPage.rightSections.length > 0;
-    if (hasContent) pages.push(currentPage);
+    flushSection();
+    flushSplit();
 
-    return pages;
+    return pages.filter(p => p.rows.length > 0);
 }
 
 function autoBalancePage(page) {
-    if (page.hasColBreak || page.rightSections.length > 0) return;
-    const all = [...page.leftSections];
-    if (all.length < 2) return;
-    const mid = Math.ceil(all.length / 2);
-    page.leftSections = all.slice(0, mid);
-    page.rightSections = all.slice(mid);
-    page.hasColBreak = true; // 자동 분할도 2컬럼 레이아웃으로 렌더링
+    page.rows.forEach(row => {
+        if (row.type !== 'split' || row.right.length > 0 || row.left.length < 2) return;
+        const mid = Math.ceil(row.left.length / 2);
+        row.right = row.left.slice(mid);
+        row.left = row.left.slice(0, mid);
+    });
 }
 
 function generateImages() {
     const pages = parseDomToPages();
+    pages.forEach(autoBalancePage);
     const previewContainer = document.getElementById('previewContainer');
     const statusChip = document.getElementById('statusChip');
 
@@ -1485,15 +1541,18 @@ function generateImages() {
         // 컬럼 구분선이 있을 때만 2컬럼, 없으면 전체 너비 1열로 렌더링
         if (textScale !== 1) {
             pages.forEach(page => {
-                [...page.leftSections, ...page.rightSections].forEach(sec => {
-                    sec.titleSize = Math.round((sec.titleSize || 24) * textScale);
-                    sec.bodySize  = Math.round((sec.bodySize  || 20) * textScale);
-                    sec.numSize   = Math.round((sec.numSize   || 35) * textScale);
+                page.rows.forEach(row => {
+                    const secs = row.type === 'full' ? [row.section] : [...row.left, ...row.right];
+                    secs.forEach(sec => {
+                        sec.titleSize = Math.round((sec.titleSize || 24) * textScale);
+                        sec.bodySize  = Math.round((sec.bodySize  || 20) * textScale);
+                        sec.numSize   = Math.round((sec.numSize   || 35) * textScale);
+                    });
                 });
             });
         }
         const canvases = pages.map(page =>
-            drawA4Canvas(cachedBgImg, page.leftSections, page.rightSections, headerRatio, themeColor, numColor, topText, periodText, textColor, page.hasColBreak, periodNote)
+            drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote)
         );
 
         generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -2139,7 +2198,8 @@ window.onload = () => {
             }
             // next = 원본 섹션 직후의 비(非)아이템 노드. null이면 맨 끝.
             // addSectionTitle/addItemRow 는 항상 끝에 추가하므로, 추가 후 올바른 위치로 이동.
-            addSectionTitle(titleVal, false, null, dupTitleSize, dupBodySize, dupNumSize);
+            const dupFullWidth = wrapper.dataset.fullWidth === 'true';
+            addSectionTitle(titleVal, false, null, dupTitleSize, dupBodySize, dupNumSize, dupFullWidth);
             if (next) container.insertBefore(container.lastElementChild, next);
             items.forEach(item => {
                 addItemRow(item);
@@ -2178,6 +2238,17 @@ window.onload = () => {
         if (e.target.closest('.js-toggle-sec-opts')) {
             const row = e.target.closest('.section-title-wrapper')?.querySelector('.section-opts-row');
             if (row) row.classList.toggle('open');
+        }
+        // 레이아웃 토글 (2열 / 전체폭)
+        if (e.target.closest('.js-layout-split') || e.target.closest('.js-layout-full')) {
+            const isFull = !!e.target.closest('.js-layout-full');
+            const wrapper = e.target.closest('.section-title-wrapper');
+            if (wrapper) {
+                wrapper.dataset.fullWidth = isFull ? 'true' : 'false';
+                wrapper.querySelector('.js-layout-split').classList.toggle('layout-btn-active', !isFull);
+                wrapper.querySelector('.js-layout-full').classList.toggle('layout-btn-active', isFull);
+                saveSnapshot(); debouncedGenerateImages();
+            }
         }
         // 비고 드롭다운 토글
         if (e.target.closest('.js-toggle-note')) {
