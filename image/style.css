@@ -786,10 +786,18 @@ body {
 }
 .rbtn:hover { background: rgba(0,0,0,0.06); color: var(--text-main); }
 .rbtn:disabled { opacity: .3; cursor: not-allowed; }
-.rbtn-primary { background: var(--primary); color: #fff; }
-.rbtn-primary:hover { background: #005EC4; color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,0.3); }
+.rbtn-primary { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+.rbtn-primary:hover { background: rgba(0,113,227,0.08); color: #005EC4; border-color: #005EC4; box-shadow: 0 2px 8px rgba(0,113,227,0.2); }
 .rbtn-primary:disabled { opacity: .35; box-shadow: none; }
-.rbtn.rbtn-unsaved { color: #FF9500; background: rgba(255,149,0,0.1); }
+@keyframes rbtn-glow {
+  0%, 100% { box-shadow: 0 0 4px 1px rgba(224,25,15,0.4); }
+  50% { box-shadow: 0 0 10px 4px rgba(224,25,15,0.7); }
+}
+.rbtn-danger { background: #E0190F; color: #fff; }
+.rbtn-danger.rbtn-unsaved { animation: rbtn-glow 1.8s ease-in-out infinite; }
+.rbtn-danger:hover { background: #B8140B; color: #fff; box-shadow: 0 0 6px 2px rgba(224,25,15,0.4); animation: none; }
+.rbtn-danger:disabled { opacity: .35; box-shadow: none; animation: none; }
+.rbtn.rbtn-unsaved { }
 .remote-divider { height: 0.5px; background: rgba(0,0,0,0.08); margin: 2px 0; }
 
 /* ── 색상 토스트 ── */

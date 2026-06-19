@@ -2448,4 +2448,6 @@ window.onload = () => {
         c.insertBefore(c.lastElementChild, _colBtnTarget);
         hideColInsertBtn();
     });
+
+    markSaved();
 };
