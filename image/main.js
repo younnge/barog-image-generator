@@ -4,6 +4,7 @@
 let generatedImagesUrls = [];
 let cachedBgImg = null;
 let isBackedUp = true;
+let activeColumnTab = 'all';
 let undoHistory = [];
 let redoHistory = [];
 const MAX_UNDO = 100;
@@ -255,6 +256,7 @@ function restoreSnapshot(data) {
     document.querySelectorAll('.item-name, .section-title-input').forEach(el => updateViolationUI(el));
     refreshAccordionVisibility();
     updateRemoteState();
+    applyColumnTabFilter();
 }
 
 function undo() {
@@ -282,6 +284,34 @@ function markSaved() {
     isBackedUp = true;
     const btn = document.getElementById('remoteSaveBtn');
     if (btn) btn.classList.remove('rbtn-unsaved');
+}
+
+function applyColumnTabFilter() {
+    const container = document.getElementById('itemsContainer');
+    if (!container) return;
+    const children = Array.from(container.children);
+    const breakIdx = children.findIndex(n => n.classList.contains('column-break-wrapper'));
+
+    children.forEach((child, i) => {
+        if (child.classList.contains('column-break-wrapper')) {
+            child.style.display = 'none';
+            return;
+        }
+        let show = true;
+        if (activeColumnTab === 'left') {
+            show = breakIdx === -1 || i < breakIdx;
+        } else if (activeColumnTab === 'right') {
+            show = breakIdx !== -1 && i > breakIdx;
+        }
+        child.style.display = show ? '' : 'none';
+    });
+
+    document.querySelectorAll('.col-tab').forEach(btn => {
+        btn.classList.toggle('col-tab-active', btn.dataset.col === activeColumnTab);
+    });
+
+    const colBtn = document.getElementById('addColumnBreakBtn');
+    if (colBtn) colBtn.style.display = activeColumnTab === 'all' ? '' : 'none';
 }
 
 /* ============================================================
@@ -2095,9 +2125,40 @@ window.onload = () => {
     });
 
     // 항목 추가 버튼
-    document.getElementById('addSectionBtn').addEventListener('click', () => { saveSnapshot(); addSectionTitle(); });
-    document.getElementById('addItemBtn').addEventListener('click', () => { saveSnapshot(); addItemRow(); });
-    document.getElementById('addColumnBreakBtn').addEventListener('click', () => { saveSnapshot(); addColumnBreak(); });
+    document.getElementById('addSectionBtn').addEventListener('click', () => {
+        saveSnapshot(); addSectionTitle();
+        if (activeColumnTab === 'left') {
+            const c = document.getElementById('itemsContainer');
+            const cb = c.querySelector('.column-break-wrapper');
+            if (cb) c.insertBefore(c.lastElementChild, cb);
+        }
+        applyColumnTabFilter();
+    });
+    document.getElementById('addItemBtn').addEventListener('click', () => {
+        saveSnapshot(); addItemRow();
+        if (activeColumnTab === 'left') {
+            const c = document.getElementById('itemsContainer');
+            const cb = c.querySelector('.column-break-wrapper');
+            if (cb) c.insertBefore(c.lastElementChild, cb);
+        }
+        applyColumnTabFilter();
+    });
+    document.getElementById('addColumnBreakBtn').addEventListener('click', () => {
+        saveSnapshot(); addColumnBreak(); applyColumnTabFilter();
+    });
+    document.querySelectorAll('.col-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const newTab = btn.dataset.col;
+            if (newTab === activeColumnTab) return;
+            if (newTab === 'right') {
+                const c = document.getElementById('itemsContainer');
+                const hasBreak = Array.from(c.children).some(n => n.classList.contains('column-break-wrapper'));
+                if (!hasBreak) { saveSnapshot(); addColumnBreak(); }
+            }
+            activeColumnTab = newTab;
+            applyColumnTabFilter();
+        });
+    });
     document.getElementById('btnToggleAll').addEventListener('click', toggleAllSections);
 
     // itemsContainer 이벤트 위임
@@ -2369,6 +2430,7 @@ window.onload = () => {
         saveSnapshot();
         generateImages();
     }
+    applyColumnTabFilter();
     initBookmarkObserver();
     refreshBookmarks();
 
