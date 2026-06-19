@@ -190,6 +190,8 @@ function getSnapshot() {
         textColor: document.getElementById('textColorHex')?.value || '#000000',
         themeColor: document.getElementById('themeHex')?.value || '#000000',
         numColor: document.getElementById('numColorHex')?.value || '#000000',
+        hlColor: document.getElementById('hlColorHex')?.value || '#FFEB3B',
+        labelBoxColor: document.getElementById('labelBoxColorHex')?.value || '#000000',
         headerHeight: document.getElementById('headerHeight')?.value || '28',
         textScale: document.getElementById('textScale')?.value || '100',
         items
@@ -224,12 +226,14 @@ function updateRemoteState() {
 function restoreSnapshot(data) {
     if (typeof data === 'string') data = JSON.parse(data);
     if (!data) return;
-    if (data.topText !== undefined) document.getElementById('topText').value = data.topText;
+    if (data.topText !== undefined) { const el = document.getElementById('topText'); el.value = data.topText; autoResizeTextarea(el); }
     if (data.periodText !== undefined) document.getElementById('periodText').value = data.periodText;
     if (data.periodNote !== undefined) document.getElementById('periodNote').value = data.periodNote;
     if (data.textColor) updateTextColorSync(data.textColor);
     if (data.themeColor) updateColorSync(data.themeColor);
     if (data.numColor) updateNumColorSync(data.numColor);
+    if (data.hlColor) updateHlColorSync(data.hlColor);
+    if (data.labelBoxColor) updateLabelBoxColorSync(data.labelBoxColor);
     if (data.headerHeight !== undefined) {
         const sl = document.getElementById('headerHeight');
         sl.value = data.headerHeight;
@@ -379,7 +383,6 @@ function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, ti
                         <button class="fmt-btn fmt-color" data-open="&lt;" data-close="&gt;" title="강조색 적용">강조</button>
                         <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
                         <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
-                        <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
                     </div>
                 </div>
             </div>
@@ -450,7 +453,7 @@ function readPriceSlots(el) {
 function buildPriceSlotEl(n, label = '', val = '') {
     const div = document.createElement('div');
     div.className = 'price-slot';
-    div.innerHTML = `<input type="text" class="btn-input price-label-input price-label-${n}" placeholder="라벨" value="${escapeHtml(label)}"><input type="text" class="btn-input price-val-input price-val-${n}" placeholder="금액" value="${escapeHtml(val)}"><button class="btn-dup-price-slot js-dup-price-slot" title="슬롯 복제">${COPY_SVG}</button><button class="btn-remove-price-slot js-remove-price-slot" title="슬롯 삭제">−</button>`;
+    div.innerHTML = `<input type="text" class="btn-input price-label-input price-label-${n}" placeholder="단위" value="${escapeHtml(label)}"><input type="text" class="btn-input price-val-input price-val-${n}" placeholder="금액" value="${escapeHtml(val)}"><button class="btn-dup-price-slot js-dup-price-slot" title="슬롯 복제">${COPY_SVG}</button><button class="btn-remove-price-slot js-remove-price-slot" title="슬롯 삭제">−</button>`;
     return div;
 }
 
@@ -831,7 +834,7 @@ function onDragTouchEnd() {
 /* ============================================================
  * 텍스트 서식 DSL (기존 앱과 동일: tokenize → parse → flattenAST)
  * ============================================================ */
-const SIZE_STEP = 8;
+const SIZE_STEP = 4;
 
 function tokenize(text) {
     const tokens = []; let cur = ''; let i = 0;
@@ -933,16 +936,16 @@ function wrapStyledText(ctx, text, maxWidth, baseSize, isBold, fonts) {
         for (let i = 0; i < chunk.text.length; i++) {
             const ch = chunk.text[i];
             if (ch === '\n') {
-                if (sub) { const w = ctx.measureText(sub).width; lineChunks.push({ ...chunk, text: sub, width: w, font }); lineW += w; }
+                if (sub) { const w = ctx.measureText(sub).width; lineChunks.push({ ...chunk, text: sub, width: w, font, size }); lineW += w; }
                 lines.push({ chunks: lineChunks, totalWidth: lineW }); lineChunks = []; lineW = 0; sub = ''; continue;
             }
             const test = sub + ch;
             if (lineW + ctx.measureText(test).width > maxWidth && (lineW > 0 || sub.length > 0)) {
-                if (sub) { const w = ctx.measureText(sub).width; lineChunks.push({ ...chunk, text: sub, width: w, font }); lineW += w; }
+                if (sub) { const w = ctx.measureText(sub).width; lineChunks.push({ ...chunk, text: sub, width: w, font, size }); lineW += w; }
                 lines.push({ chunks: lineChunks, totalWidth: lineW }); lineChunks = []; lineW = 0; sub = ch;
             } else { sub = test; }
         }
-        if (sub) { const w = ctx.measureText(sub).width; lineChunks.push({ ...chunk, text: sub, width: w, font }); lineW += w; }
+        if (sub) { const w = ctx.measureText(sub).width; lineChunks.push({ ...chunk, text: sub, width: w, font, size }); lineW += w; }
     }
     if (lineChunks.length > 0) lines.push({ chunks: lineChunks, totalWidth: lineW });
     return lines.length ? lines : [{ chunks: [], totalWidth: 0 }];
@@ -954,10 +957,10 @@ function wrapStyledText(ctx, text, maxWidth, baseSize, isBold, fonts) {
 const CONFIG = {
     W: 1240, H: 1754, SCALE: 2,
     fonts: {
-        main: "'Paperlogy','Pretendard','Noto Sans JP','Noto Sans SC','Noto Sans Thai',sans-serif",
-        bold: "'GmarketSansBold','Noto Sans JP','Noto Sans SC','Noto Sans Thai',sans-serif",
-        medium: "'GmarketSansMedium','Noto Sans JP','Noto Sans SC','Noto Sans Thai',sans-serif",
-        cheoeumcheoreom: "'210 Cheoeumcheoreom','GmarketSansBold',sans-serif"
+        main: "'Paperlogy','Pretendard','Noto Sans JP','Noto Sans SC','Noto Sans TC','Noto Sans Thai',sans-serif",
+        bold: "'GmarketSansBold','Noto Sans JP','Noto Sans SC','Noto Sans TC','Noto Sans Thai',sans-serif",
+        medium: "'GmarketSansMedium','Noto Sans JP','Noto Sans SC','Noto Sans TC','Noto Sans Thai',sans-serif",
+        cheoeumcheoreom: "'GmarketSansBold',sans-serif"
     }
 };
 
@@ -976,22 +979,26 @@ function roundRect(ctx, x, y, w, h, r) {
  * ============================================================ */
 function measureItemRow(ctx, item, colW, fonts, bodySize = 20, numSize = 35) {
     if (item.isSublabel) return 44;
-    const NAME_SIZE = bodySize, PAD_Y = 12, LINE_H = NAME_SIZE * 1.45, NOTE_SIZE = 17;
+    const NAME_SIZE = bodySize, PAD_Y = 12, NOTE_SIZE = 17;
     const PAD_X = 18;
-    const nameLines_check = wrapStyledText(ctx, item.itemName, Math.floor(colW * 0.50), NAME_SIZE, false, fonts);
+    const getLineH = (line) => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
+    const nameLines_check = wrapStyledText(ctx, item.itemName, Math.floor(colW - PAD_X * 2), NAME_SIZE, false, fonts);
     const noteH = item.note ? (NOTE_SIZE * 1.5 + 2) : 0;
     const tiers = buildTiers(item);
     const priceW = tiers.length ? measurePriceTiersWidth(ctx, tiers, numSize, fonts) : 0;
-    const isStacked = nameLines_check.length > 1 || (tiers.length > 0 && priceW > colW * 0.50 - PAD_X);
+    const nameW_check = nameLines_check.length === 1 ? (nameLines_check[0].totalWidth || 0) : 0;
+    const isStacked = nameLines_check.length > 1 || (tiers.length > 0 && nameW_check + priceW + PAD_X > colW - PAD_X * 2);
     if (isStacked) {
         const PRICE_TIER_H = 35, PRICE_ROW_GAP = 6, PRICE_GAP = 1;
         const nameLines = wrapStyledText(ctx, item.itemName, Math.floor(colW - PAD_X * 2), NAME_SIZE, false, fonts);
         const tierRows = tiers.length ? packTierRows(ctx, tiers, colW - PAD_X * 2, numSize, fonts) : [];
         const numPriceRows = tierRows.length || 1;
         const priceTotalH = tiers.length ? numPriceRows * PRICE_TIER_H + (numPriceRows - 1) * PRICE_ROW_GAP : PRICE_TIER_H;
-        return PAD_Y + Math.ceil(nameLines.length * LINE_H) + PRICE_GAP + priceTotalH + PAD_Y + noteH;
+        const nameBlockH = nameLines.reduce((s, l) => s + getLineH(l), 0);
+        return PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + priceTotalH + PAD_Y + noteH;
     }
-    return Math.max(Math.ceil(nameLines_check.length * LINE_H) + PAD_Y * 2 + noteH, 52);
+    const nameBlockH = nameLines_check.reduce((s, l) => s + getLineH(l), 0);
+    return Math.max(Math.ceil(nameBlockH) + PAD_Y * 2 + noteH, 52);
 }
 function measureSection(ctx, sec, colW, fonts) {
     let h = sec.title ? (sec.titleSize || 24) + 16 : 0;
@@ -1013,7 +1020,7 @@ function collectSectionRects(ctx, sections, colX, startY, maxY, colW, fonts) {
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '') {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', labelBoxColor = '#000000') {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -1091,11 +1098,11 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     for (const row of rows) {
         if (y >= contentBottom) break;
         if (row.type === 'full') {
-            y = drawSection(ctx, row.section, col1X, y, fullW, themeColor, numColor, fonts) + 15;
+            y = drawSection(ctx, row.section, col1X, y, fullW, themeColor, numColor, fonts, hlColor, labelBoxColor) + 15;
         } else {
-            const ly = drawColumnSections(ctx, row.left, col1X, y, contentBottom, twoColW, themeColor, numColor, fonts);
+            const ly = drawColumnSections(ctx, row.left, col1X, y, contentBottom, twoColW, themeColor, numColor, fonts, hlColor, labelBoxColor);
             const ry = row.right.length
-                ? drawColumnSections(ctx, row.right, col2X, y, contentBottom, twoColW, themeColor, numColor, fonts)
+                ? drawColumnSections(ctx, row.right, col2X, y, contentBottom, twoColW, themeColor, numColor, fonts, hlColor, labelBoxColor)
                 : y;
             y = Math.max(ly, ry);
         }
@@ -1103,44 +1110,75 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
 
     // 제목 + 이벤트 기간 (헤더 중앙, 두 줄)
     if (headerH > 0 && (topText || periodText)) {
-        ctx.fillStyle = textColor;
-        ctx.font = `400 22px ${fonts.main}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
         ctx.letterSpacing = '0px';
+        ctx.textBaseline = 'bottom';
+        const TOP_SIZE = 22;
+        const titleMaxW = W - MARGIN * 2;
+
+        const drawStyledCentered = (styledLines, centerX, baselineY) => {
+            if (!styledLines.length || !styledLines[0].chunks.length) return;
+            const line = styledLines[0];
+            let lx = centerX - line.totalWidth / 2;
+            ctx.letterSpacing = '0px';
+            ctx.textBaseline = 'bottom';
+            for (const chunk of line.chunks) {
+                ctx.font = chunk.font;
+                ctx.fillStyle = chunk.isHighlight ? hlColor : textColor;
+                ctx.textAlign = 'left';
+                ctx.fillText(chunk.text, lx, baselineY);
+                lx += chunk.width;
+            }
+        };
+
         if (topText && periodText) {
-            ctx.fillText(periodText, W / 2, headerH - 12);
-            ctx.fillText(topText, W / 2, headerH - 40);
+            const titleLines = wrapStyledText(ctx, topText, titleMaxW, TOP_SIZE, false, fonts);
+            drawStyledCentered(titleLines, W / 2, headerH - 40);
+            const periodLines = wrapStyledText(ctx, periodText, titleMaxW, TOP_SIZE, false, fonts);
+            drawStyledCentered(periodLines, W / 2, headerH - 12);
+        } else if (topText) {
+            const titleLines = wrapStyledText(ctx, topText, titleMaxW, TOP_SIZE, false, fonts);
+            drawStyledCentered(titleLines, W / 2, headerH - 12);
         } else {
-            ctx.fillText(topText || periodText, W / 2, headerH - 12);
+            const periodLines = wrapStyledText(ctx, periodText, titleMaxW, TOP_SIZE, false, fonts);
+            drawStyledCentered(periodLines, W / 2, headerH - 12);
         }
     }
 
     // 기간 우측 텍스트 (헤더 우측 끝, 기간 높이에 우측 정렬)
     if (headerH > 0 && periodNote) {
-        ctx.fillStyle = textColor;
-        ctx.font = `400 18px ${fonts.main}`;
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'bottom';
-        ctx.letterSpacing = '0px';
-        ctx.fillText(periodNote, W - MARGIN, headerH - 12);
+        const NOTE_SIZE = 18;
+        const noteLines = wrapStyledText(ctx, periodNote, W - MARGIN * 2, NOTE_SIZE, false, fonts);
+        if (noteLines.length && noteLines[0].chunks.length) {
+            const noteLine = noteLines[0];
+            let nx = W - MARGIN;
+            ctx.letterSpacing = '0px';
+            ctx.textBaseline = 'bottom';
+            ctx.textAlign = 'left';
+            for (let i = noteLine.chunks.length - 1; i >= 0; i--) {
+                const chunk = noteLine.chunks[i];
+                ctx.font = chunk.font;
+                ctx.fillStyle = chunk.isHighlight ? hlColor : textColor;
+                nx -= chunk.width;
+                ctx.fillText(chunk.text, nx, headerH - 12);
+            }
+        }
     }
 
 
     return canvas;
 }
 
-function drawColumnSections(ctx, sections, colX, startY, maxY, colW, themeColor, numColor, fonts) {
+function drawColumnSections(ctx, sections, colX, startY, maxY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', labelBoxColor = '#000000') {
     let y = startY;
     for (const sec of sections) {
         if (y >= maxY) break;
-        y = drawSection(ctx, sec, colX, y, colW, themeColor, numColor, fonts);
+        y = drawSection(ctx, sec, colX, y, colW, themeColor, numColor, fonts, hlColor, labelBoxColor);
         y += 15;
     }
     return y;
 }
 
-function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts) {
+function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', labelBoxColor = '#000000') {
     let y = startY;
 
     // 섹션 헤더 바
@@ -1159,13 +1197,24 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts) {
             ctx.strokeRect(x + 1.5, y + 1.5, colW - 3, HEADER_H - 3);
             ctx.fillStyle = themeColor;
         }
-        ctx.font = `700 ${sec.titleSize || 24}px ${fonts.main}`;
-        ctx.letterSpacing = '0px';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'alphabetic';
-        const _hm = ctx.measureText(sec.title);
-        const _textY = y + HEADER_H / 2 + (_hm.actualBoundingBoxAscent - _hm.actualBoundingBoxDescent) / 2;
-        ctx.fillText(sec.title, x + colW / 2, _textY);
+        const _baseSize = sec.titleSize || 24;
+        const _baseColor = style === 'filled' ? '#ffffff' : themeColor;
+        const _hlColor   = style === 'filled' ? hlColor : numColor;
+        const _titleLines = wrapStyledText(ctx, sec.title, colW - 16, _baseSize, true, fonts);
+        const _line = _titleLines[0];
+        if (_line && _line.chunks.length > 0) {
+            const _midY = y + HEADER_H / 2;
+            let _lx = x + colW / 2 - _line.totalWidth / 2;
+            ctx.letterSpacing = '0px';
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'left';
+            for (const chunk of _line.chunks) {
+                ctx.font = chunk.font;
+                ctx.fillStyle = chunk.isHighlight ? _hlColor : _baseColor;
+                ctx.fillText(chunk.text, _lx, _midY);
+                _lx += chunk.width;
+            }
+        }
         y += HEADER_H;
     }
 
@@ -1175,7 +1224,7 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts) {
         const rowBg = '#ffffff';
         const isLast = i === sec.items.length - 1;
         const nextIsSublabel = !isLast && !!sec.items[i + 1]?.isSublabel;
-        y = drawItemRow(ctx, sec.items[i], x, y, colW, themeColor, numColor, rowBg, fonts, isLast || nextIsSublabel, sec.bodySize || 20, sec.numSize || 35);
+        y = drawItemRow(ctx, sec.items[i], x, y, colW, themeColor, numColor, rowBg, fonts, isLast || nextIsSublabel, sec.bodySize || 20, sec.numSize || 35, labelBoxColor);
     }
 
     // 섹션 아이템 영역 테두리 (4면 균일)
@@ -1189,10 +1238,10 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts) {
     return y;
 }
 
-function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35) {
+function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35, labelBoxColor = '#000000') {
     const PAD_X = 18, PAD_Y = 12;
     const NAME_SIZE = bodySize, PRICE_SIZE = 28, NOTE_SIZE = 17;
-    const LINE_H = NAME_SIZE * 1.45;
+    const getLineH = (line) => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
 
     // 소제목 행
     if (item.isSublabel) {
@@ -1218,16 +1267,19 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
     // 가격 총 너비 측정 → 이름과 겹치면 스택 강제
     const tiers = buildTiers(item);
     const priceW = measurePriceTiersWidth(ctx, tiers, numSize, fonts);
-    // 일반 항목: 50% 너비로 먼저 측정해 멀티라인 여부 판단
-    const nameLines_check = wrapStyledText(ctx, item.itemName, Math.floor(colW * 0.50), NAME_SIZE, false, fonts);
-    const isStacked = nameLines_check.length > 1 || (tiers.length > 0 && priceW > colW * 0.50 - PAD_X);
+    // 실제 항목명 너비 기준으로 스택 여부 판단 (짧은 이름이면 금액이 넓어도 나란히 배치)
+    const nameLines_check = wrapStyledText(ctx, item.itemName, Math.floor(colW - PAD_X * 2), NAME_SIZE, false, fonts);
+    const nameW_check = nameLines_check.length === 1 ? (nameLines_check[0].totalWidth || 0) : 0;
+    const isStacked = nameLines_check.length > 1 || (tiers.length > 0 && nameW_check + priceW + PAD_X > colW - PAD_X * 2);
 
     // 스택 모드면 전체 너비로 재측정
     const nameMaxW = isStacked ? Math.floor(colW - PAD_X * 2) : Math.floor(colW * 0.50);
     const nameLines = isStacked
         ? wrapStyledText(ctx, item.itemName, nameMaxW, NAME_SIZE, false, fonts)
         : nameLines_check;
-    const nameBlockH = nameLines.length * LINE_H;
+    const lineHeights = nameLines.map(getLineH);
+    const nameBlockH = lineHeights.reduce((s, h) => s + h, 0);
+    const firstLineH = lineHeights[0] || NAME_SIZE;
 
     const hasNote = !!item.note;
     const noteH = hasNote ? (NOTE_SIZE * 1.5 + 2) : 0;
@@ -1245,13 +1297,13 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
     if (isStacked) {
         rowH = PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + priceTotalH + PAD_Y + noteH;
         priceCenterY = startY + PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + PRICE_TIER_H / 2;
-        nameStartY = startY + PAD_Y + LINE_H / 2;
+        nameStartY = startY + PAD_Y + firstLineH / 2;
     } else {
         const contentH = Math.ceil(nameBlockH) + PAD_Y * 2 + noteH;
         rowH = Math.max(contentH, 52);
         const priceAreaH = rowH - noteH;
         priceCenterY = startY + priceAreaH / 2;
-        nameStartY = startY + priceAreaH / 2 - (nameBlockH - LINE_H) / 2;
+        nameStartY = startY + priceAreaH / 2 - (nameBlockH - firstLineH) / 2;
     }
 
     // 배경
@@ -1271,7 +1323,8 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
     // 항목명
     ctx.letterSpacing = '0px';
     let ny = nameStartY;
-    for (const line of nameLines) {
+    for (let li = 0; li < nameLines.length; li++) {
+        const line = nameLines[li];
         let lx = x + PAD_X;
         for (const chunk of line.chunks) {
             ctx.font = chunk.font;
@@ -1281,16 +1334,16 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
             ctx.fillText(chunk.text, lx, ny);
             lx += chunk.width;
         }
-        ny += LINE_H;
+        if (li + 1 < nameLines.length) ny += lineHeights[li] / 2 + lineHeights[li + 1] / 2;
     }
 
     // 가격 티어
     const priceRightX = x + colW - PAD_X;
     if (isStacked && tierRows.length > 0) {
         const priceTopY = startY + PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP;
-        drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP);
+        drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP, labelBoxColor);
     } else {
-        drawPriceTiers(ctx, item, priceRightX, priceCenterY, themeColor, numColor, PRICE_SIZE, fonts, numSize);
+        drawPriceTiers(ctx, item, priceRightX, priceCenterY, themeColor, numColor, PRICE_SIZE, fonts, numSize, labelBoxColor);
     }
 
     // 비고 텍스트 (우하단 작은 글씨)
@@ -1322,9 +1375,14 @@ function measureSingleTierWidth(ctx, tier, numSize, fonts) {
     const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = 13;
     let w = 0;
     if (tier.price) {
-        const { num, unit } = splitPriceText(tier.price);
-        if (unit) { ctx.letterSpacing = '0px'; ctx.font = `400 ${UNIT_SIZE}px ${fonts.main}`; w += ctx.measureText(unit).width + 2.5; }
-        if (num) { ctx.letterSpacing = '-1.5px'; ctx.font = `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}`; w += ctx.measureText(num).width; }
+        const tokens = tokenizePriceText(tier.price);
+        for (let t = 0; t < tokens.length; t++) {
+            const tok = tokens[t];
+            if (tok.type === 'num') { ctx.letterSpacing = '-1.5px'; ctx.font = `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}`; }
+            else { ctx.letterSpacing = '0px'; ctx.font = `400 ${UNIT_SIZE}px ${fonts.main}`; }
+            w += ctx.measureText(tok.text).width;
+            if (t < tokens.length - 1 && tokens[t + 1].type !== tok.type) w += 2;
+        }
         if (tier.label) w += 10;
     }
     if (tier.label) { ctx.font = `500 ${CHIP_LABEL_SIZE}px ${fonts.medium}`; w += ctx.measureText(tier.label).width + 18; }
@@ -1339,6 +1397,10 @@ function measurePriceTiersWidth(ctx, tiers, numSize, fonts) {
 
 function packTierRows(ctx, tiers, maxW, numSize, fonts) {
     const TIER_GAP = 14;
+    // 4개일 때 2×2 강제
+    if (tiers.length === 4) {
+        return [tiers.slice(0, 2), tiers.slice(2, 4)];
+    }
     // 역방향으로 채워서 뒤집으면 첫 행이 적고 마지막 행이 많은 하단 집중 배치가 됨 (5개 → 2+3)
     const reversed = [...tiers].reverse();
     const rows = [[]];
@@ -1355,12 +1417,20 @@ function packTierRows(ctx, tiers, maxW, numSize, fonts) {
     return rows.filter(r => r.length > 0).reverse().map(row => row.reverse());
 }
 
-function splitPriceText(str) {
-    const m = String(str || '').match(/^([\d,\.]+)(.*)/);
-    return m ? { num: m[1], unit: m[2] || '' } : { num: '', unit: String(str || '') };
+function tokenizePriceText(str) {
+    const tokens = [], s = String(str || '');
+    let i = 0;
+    while (i < s.length) {
+        const isNum = /[\d,\.]/.test(s[i]);
+        let j = i + 1;
+        while (j < s.length && /[\d,\.]/.test(s[j]) === isNum) j++;
+        tokens.push({ type: isNum ? 'num' : 'unit', text: s.slice(i, j) });
+        i = j;
+    }
+    return tokens;
 }
 
-function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSize, fonts, numSize = 35) {
+function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSize, fonts, numSize = 35, labelBoxColor = '#000000') {
     const tiers = [];
     if (item.prices?.length) {
         item.prices.forEach(p => { if (p.label || p.val) tiers.push({ label: p.label, price: p.val }); });
@@ -1386,27 +1456,19 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
     for (let i = tiers.length - 1; i >= 0; i--) {
         const tier = tiers[i];
         if (tier.price) {
-            const { num, unit } = splitPriceText(tier.price);
+            const tokens = tokenizePriceText(tier.price);
             let px = x;
-            if (unit) {
-                ctx.letterSpacing = '0px';
-                ctx.font = `400 ${UNIT_SIZE}px ${fonts.main}`;
-                const uw = ctx.measureText(unit).width;
-                ctx.textAlign = 'right';
-                ctx.textBaseline = 'alphabetic';
-                ctx.fillStyle = '#111111';
-                ctx.fillText(unit, px, baselineY);
-                px -= uw + 2.5;
-            }
-            if (num) {
-                ctx.letterSpacing = '-1.5px';
-                ctx.font = `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}`;
-                const nw = ctx.measureText(num).width;
-                ctx.textAlign = 'right';
-                ctx.textBaseline = 'alphabetic';
-                ctx.fillStyle = numColor;
-                ctx.fillText(num, px, baselineY);
-                px -= nw;
+            for (let t = tokens.length - 1; t >= 0; t--) {
+                const tok = tokens[t];
+                const isNum = tok.type === 'num';
+                ctx.letterSpacing = isNum ? '-1.5px' : '0px';
+                ctx.font = isNum ? `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}` : `400 ${UNIT_SIZE}px ${fonts.main}`;
+                ctx.fillStyle = isNum ? numColor : '#111111';
+                ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+                const tw = ctx.measureText(tok.text).width;
+                ctx.fillText(tok.text, px, baselineY);
+                px -= tw;
+                if (t > 0 && tokens[t - 1].type !== tok.type) px -= 2;
             }
             x = px - (tier.label ? 10 : 0);
         }
@@ -1415,7 +1477,7 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
             const lw = ctx.measureText(tier.label).width;
             const chipW = lw + 18;
             const chipX = x - chipW;
-            ctx.fillStyle = themeColor;
+            ctx.fillStyle = labelBoxColor;
             roundRect(ctx, chipX, centerY - CHIP_H / 2, chipW, CHIP_H, CHIP_H / 2);
             ctx.fillStyle = '#ffffff';
             ctx.textAlign = 'center';
@@ -1428,7 +1490,7 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
     }
 }
 
-function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fonts, numSize, TIER_H = 35, ROW_GAP = 6) {
+function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fonts, numSize, TIER_H = 35, ROW_GAP = 6, labelBoxColor = '#000000') {
     const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = 13;
     const CHIP_H = Math.round(CHIP_LABEL_SIZE * 2);
     const TIER_GAP = 14;
@@ -1447,19 +1509,18 @@ function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fo
         for (let i = row.length - 1; i >= 0; i--) {
             const tier = row[i];
             if (tier.price) {
-                const { num, unit } = splitPriceText(tier.price);
+                const tokens = tokenizePriceText(tier.price);
                 let px = x;
-                if (unit) {
-                    ctx.letterSpacing = '0px'; ctx.font = `400 ${UNIT_SIZE}px ${fonts.main}`;
-                    const uw = ctx.measureText(unit).width;
-                    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#111111';
-                    ctx.fillText(unit, px, baselineY); px -= uw + 2.5;
-                }
-                if (num) {
-                    ctx.letterSpacing = '-1.5px'; ctx.font = `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}`;
-                    const nw = ctx.measureText(num).width;
-                    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = numColor;
-                    ctx.fillText(num, px, baselineY); px -= nw;
+                for (let t = tokens.length - 1; t >= 0; t--) {
+                    const tok = tokens[t];
+                    const isNum = tok.type === 'num';
+                    ctx.letterSpacing = isNum ? '-1.5px' : '0px';
+                    ctx.font = isNum ? `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}` : `400 ${UNIT_SIZE}px ${fonts.main}`;
+                    ctx.fillStyle = isNum ? numColor : '#111111';
+                    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+                    const tw = ctx.measureText(tok.text).width;
+                    ctx.fillText(tok.text, px, baselineY); px -= tw;
+                    if (t > 0 && tokens[t - 1].type !== tok.type) px -= 2;
                 }
                 x = px - (tier.label ? 10 : 0);
             }
@@ -1468,7 +1529,7 @@ function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fo
                 const lw = ctx.measureText(tier.label).width;
                 const chipW = lw + 18;
                 const chipX = x - chipW;
-                ctx.fillStyle = themeColor;
+                ctx.fillStyle = labelBoxColor;
                 roundRect(ctx, chipX, centerY - CHIP_H / 2, chipW, CHIP_H, CHIP_H / 2);
                 ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.fillText(tier.label, chipX + chipW / 2, centerY);
@@ -1578,6 +1639,8 @@ function generateImages() {
 
     const themeColor = document.getElementById('themeHex')?.value || '#000000';
     const numColor = document.getElementById('numColorHex')?.value || '#000000';
+    const hlColor = document.getElementById('hlColorHex')?.value || '#FFEB3B';
+    const labelBoxColor = document.getElementById('labelBoxColorHex')?.value || '#000000';
     const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '28', 10)) / 100;
     const topText = document.getElementById('topText')?.value || '';
     const periodText = document.getElementById('periodText')?.value || '';
@@ -1600,7 +1663,7 @@ function generateImages() {
             });
         }
         const canvases = pages.map(page =>
-            drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote)
+            drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, labelBoxColor)
         );
 
         generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -1640,6 +1703,16 @@ const MINI_PRESET_META = {
         storageKey: 'a4TextColorSlots',
         getColor: () => document.getElementById('textColorHex')?.value || '#000000',
         apply: c => { updateTextColorSync(c); saveSnapshot(); debouncedGenerateImages(); }
+    },
+    hlColorPresets: {
+        storageKey: 'a4HlColorSlots',
+        getColor: () => document.getElementById('hlColorHex')?.value || '#FFEB3B',
+        apply: c => { updateHlColorSync(c); saveSnapshot(); debouncedGenerateImages(); }
+    },
+    labelBoxColorPresets: {
+        storageKey: 'a4LabelBoxColorSlots',
+        getColor: () => document.getElementById('labelBoxColorHex')?.value || '#000000',
+        apply: c => { updateLabelBoxColorSync(c); saveSnapshot(); debouncedGenerateImages(); }
     }
 };
 function loadMiniSlots(storageKey) {
@@ -1829,6 +1902,26 @@ function updateNumColorSync(hex) {
     if (swatch) swatch.style.backgroundColor = upper;
 }
 
+function updateHlColorSync(hex) {
+    const upper = hex.toUpperCase();
+    const picker = document.getElementById('hlColorPicker');
+    const hexInput = document.getElementById('hlColorHex');
+    const swatch = document.getElementById('hlColorSwatch');
+    if (picker) picker.value = upper;
+    if (hexInput) hexInput.value = upper;
+    if (swatch) swatch.style.backgroundColor = upper;
+}
+
+function updateLabelBoxColorSync(hex) {
+    const upper = hex.toUpperCase();
+    const picker = document.getElementById('labelBoxColorPicker');
+    const hexInput = document.getElementById('labelBoxColorHex');
+    const swatch = document.getElementById('labelBoxColorSwatch');
+    if (picker) picker.value = upper;
+    if (hexInput) hexInput.value = upper;
+    if (swatch) swatch.style.backgroundColor = upper;
+}
+
 function updateSliderBg(slider) {
     const val = slider.value, min = slider.min || 0, max = slider.max || 100;
     const pct = ((val - min) / (max - min)) * 100;
@@ -2001,6 +2094,60 @@ window.onload = () => {
         el.addEventListener('blur', () => { if (el._before !== el.value) saveSnapshot(); });
     });
 
+    // 강조 색상
+    const hlColorPicker = document.getElementById('hlColorPicker');
+    const hlColorHex = document.getElementById('hlColorHex');
+    const hlColorSwatch = document.getElementById('hlColorSwatch');
+    hlColorPicker.addEventListener('input', e => {
+        const c = e.target.value;
+        hlColorHex.value = c.toUpperCase();
+        hlColorSwatch.style.backgroundColor = c;
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
+    hlColorHex.addEventListener('input', e => {
+        let c = e.target.value;
+        if (!c.startsWith('#')) c = '#' + c;
+        if (/^#[0-9A-F]{6}$/i.test(c)) {
+            hlColorHex.value = c.toUpperCase();
+            hlColorPicker.value = c;
+            hlColorSwatch.style.backgroundColor = c;
+            debouncedGenerateImages();
+        }
+    });
+    hlColorSwatch.addEventListener('click', () => hlColorPicker.click());
+    [hlColorPicker, hlColorHex].forEach(el => {
+        el.addEventListener('focus', () => { el._before = el.value; });
+        el.addEventListener('blur', () => { if (el._before !== el.value) saveSnapshot(); });
+    });
+
+    // 단위박스 색상
+    const labelBoxColorPicker = document.getElementById('labelBoxColorPicker');
+    const labelBoxColorHex = document.getElementById('labelBoxColorHex');
+    const labelBoxColorSwatch = document.getElementById('labelBoxColorSwatch');
+    labelBoxColorPicker.addEventListener('input', e => {
+        const c = e.target.value;
+        labelBoxColorHex.value = c.toUpperCase();
+        labelBoxColorSwatch.style.backgroundColor = c;
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
+    labelBoxColorHex.addEventListener('input', e => {
+        let c = e.target.value;
+        if (!c.startsWith('#')) c = '#' + c;
+        if (/^#[0-9A-F]{6}$/i.test(c)) {
+            labelBoxColorHex.value = c.toUpperCase();
+            labelBoxColorPicker.value = c;
+            labelBoxColorSwatch.style.backgroundColor = c;
+            debouncedGenerateImages();
+        }
+    });
+    labelBoxColorSwatch.addEventListener('click', () => labelBoxColorPicker.click());
+    [labelBoxColorPicker, labelBoxColorHex].forEach(el => {
+        el.addEventListener('focus', () => { el._before = el.value; });
+        el.addEventListener('blur', () => { if (el._before !== el.value) saveSnapshot(); });
+    });
+
     // 슬라이더
     const slider = document.getElementById('headerHeight');
     slider.addEventListener('input', () => {
@@ -2090,21 +2237,67 @@ window.onload = () => {
 
     // 상단 텍스트
     const topInput = document.getElementById('topText');
-    topInput.addEventListener('input', () => { debouncedGenerateImages(); handleInputSnapshot(); });
+    topInput.addEventListener('input', () => { autoResizeTextarea(topInput); debouncedGenerateImages(); handleInputSnapshot(); });
     topInput.addEventListener('focus', () => { topInput._before = topInput.value; });
     topInput.addEventListener('blur', () => { if (topInput._before !== topInput.value) saveSnapshot(); });
+    // 제목 서식 툴바
+    topInput.closest('.item-name-wrapper')?.addEventListener('mousedown', e => {
+        const btn = e.target.closest('.fmt-btn');
+        if (!btn) return;
+        e.preventDefault();
+        const open = btn.dataset.open, close = btn.dataset.close;
+        const s = topInput.selectionStart, end = topInput.selectionEnd;
+        const sel = topInput.value.substring(s, end);
+        topInput.value = topInput.value.substring(0, s) + open + sel + close + topInput.value.substring(end);
+        const cursor = sel ? s + open.length + sel.length + close.length : s + open.length;
+        topInput.setSelectionRange(cursor, cursor);
+        topInput.focus();
+        autoResizeTextarea(topInput);
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
 
     // 이벤트 기간
     const periodInput = document.getElementById('periodText');
     periodInput.addEventListener('input', () => { debouncedGenerateImages(); handleInputSnapshot(); });
     periodInput.addEventListener('focus', () => { periodInput._before = periodInput.value; });
     periodInput.addEventListener('blur', () => { if (periodInput._before !== periodInput.value) saveSnapshot(); });
+    // 이벤트 기간 서식 툴바
+    periodInput.closest('.item-name-wrapper')?.addEventListener('mousedown', e => {
+        const btn = e.target.closest('.fmt-btn');
+        if (!btn) return;
+        e.preventDefault();
+        const open = btn.dataset.open, close = btn.dataset.close;
+        const s = periodInput.selectionStart, end = periodInput.selectionEnd;
+        const sel = periodInput.value.substring(s, end);
+        periodInput.value = periodInput.value.substring(0, s) + open + sel + close + periodInput.value.substring(end);
+        const cursor = sel ? s + open.length + sel.length + close.length : s + open.length;
+        periodInput.setSelectionRange(cursor, cursor);
+        periodInput.focus();
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
 
     // 기간 우측 텍스트
     const periodNoteInput = document.getElementById('periodNote');
     periodNoteInput.addEventListener('input', () => { debouncedGenerateImages(); handleInputSnapshot(); });
     periodNoteInput.addEventListener('focus', () => { periodNoteInput._before = periodNoteInput.value; });
     periodNoteInput.addEventListener('blur', () => { if (periodNoteInput._before !== periodNoteInput.value) saveSnapshot(); });
+    // 기간 우측 텍스트 서식 툴바
+    periodNoteInput.closest('.item-name-wrapper')?.addEventListener('mousedown', e => {
+        const btn = e.target.closest('.fmt-btn');
+        if (!btn) return;
+        e.preventDefault();
+        const open = btn.dataset.open, close = btn.dataset.close;
+        const s = periodNoteInput.selectionStart, end = periodNoteInput.selectionEnd;
+        const sel = periodNoteInput.value.substring(s, end);
+        periodNoteInput.value = periodNoteInput.value.substring(0, s) + open + sel + close + periodNoteInput.value.substring(end);
+        const cursor = sel ? s + open.length + sel.length + close.length : s + open.length;
+        periodNoteInput.setSelectionRange(cursor, cursor);
+        periodNoteInput.focus();
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
 
 
     // 배경 이미지
@@ -2374,6 +2567,8 @@ window.onload = () => {
     renderColorPresets();
     renderMiniColorPresets('numColorPresets');
     renderMiniColorPresets('textColorPresets');
+    renderMiniColorPresets('hlColorPresets');
+    renderMiniColorPresets('labelBoxColorPresets');
     initMiniPresetHandlers();
     document.getElementById('colorPresets')?.addEventListener('click', e => {
         // 빌트인 프리셋 카드
