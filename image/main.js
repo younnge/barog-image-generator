@@ -294,7 +294,7 @@ function applyColumnTabFilter() {
 
     children.forEach((child, i) => {
         if (child.classList.contains('column-break-wrapper')) {
-            child.style.display = 'none';
+            child.style.display = activeColumnTab === 'all' ? '' : 'none';
             return;
         }
         let show = true;
@@ -626,13 +626,17 @@ function refreshBookmarks() {
 
     const hasColBreak = children.some(n => n.classList.contains('column-break-wrapper'));
 
-    function makeEntry(node) {
+    function makeEntry(node, side) {
         const title = node.querySelector('.section-title-input')?.value.trim() || '(제목 없음)';
         const entry = document.createElement('div');
         const isActive = !node.classList.contains('collapsed');
         entry.className = 'bm-entry bm-section' + (isActive ? ' bm-active' : '');
         entry.textContent = title;
         entry.addEventListener('click', () => {
+            if (side && side !== activeColumnTab) {
+                activeColumnTab = side;
+                applyColumnTabFilter();
+            }
             document.querySelectorAll('#itemsContainer .section-title-wrapper').forEach(s => {
                 s.classList.toggle('collapsed', s !== node);
             });
@@ -650,11 +654,13 @@ function refreshBookmarks() {
         const rightCol = document.createElement('div');
         rightCol.className = 'bm-col';
         let currentCol = leftCol;
+        let currentSide = 'left';
         children.forEach(node => {
             if (node.classList.contains('column-break-wrapper')) {
                 currentCol = rightCol;
+                currentSide = 'right';
             } else if (node.classList.contains('section-title-wrapper')) {
-                currentCol.appendChild(makeEntry(node));
+                currentCol.appendChild(makeEntry(node, currentSide));
             }
         });
         list.appendChild(leftCol);
@@ -663,7 +669,7 @@ function refreshBookmarks() {
         list.classList.remove('bm-two-col');
         children.forEach(node => {
             if (node.classList.contains('section-title-wrapper')) {
-                list.appendChild(makeEntry(node));
+                list.appendChild(makeEntry(node, 'all'));
             }
         });
     }
@@ -968,16 +974,28 @@ function roundRect(ctx, x, y, w, h, r) {
 /* ============================================================
  * 섹션 높이 측정 (배경 위 카드 배경 그리기용 사전 계산)
  * ============================================================ */
-function measureItemRow(ctx, item, colW, fonts, bodySize = 20) {
+function measureItemRow(ctx, item, colW, fonts, bodySize = 20, numSize = 35) {
     if (item.isSublabel) return 44;
     const NAME_SIZE = bodySize, PAD_Y = 12, LINE_H = NAME_SIZE * 1.45, NOTE_SIZE = 17;
-    const nameLines = wrapStyledText(ctx, item.itemName, Math.floor(colW * 0.50), NAME_SIZE, false, fonts);
+    const PAD_X = 18;
+    const nameLines_check = wrapStyledText(ctx, item.itemName, Math.floor(colW * 0.50), NAME_SIZE, false, fonts);
     const noteH = item.note ? (NOTE_SIZE * 1.5 + 2) : 0;
-    return Math.max(Math.ceil(nameLines.length * LINE_H) + PAD_Y * 2 + noteH, 52);
+    const tiers = buildTiers(item);
+    const priceW = tiers.length ? measurePriceTiersWidth(ctx, tiers, numSize, fonts) : 0;
+    const isStacked = nameLines_check.length > 1 || (tiers.length > 0 && priceW > colW * 0.50 - PAD_X);
+    if (isStacked) {
+        const PRICE_TIER_H = 35, PRICE_ROW_GAP = 6, PRICE_GAP = 1;
+        const nameLines = wrapStyledText(ctx, item.itemName, Math.floor(colW - PAD_X * 2), NAME_SIZE, false, fonts);
+        const tierRows = tiers.length ? packTierRows(ctx, tiers, colW - PAD_X * 2, numSize, fonts) : [];
+        const numPriceRows = tierRows.length || 1;
+        const priceTotalH = tiers.length ? numPriceRows * PRICE_TIER_H + (numPriceRows - 1) * PRICE_ROW_GAP : PRICE_TIER_H;
+        return PAD_Y + Math.ceil(nameLines.length * LINE_H) + PRICE_GAP + priceTotalH + PAD_Y + noteH;
+    }
+    return Math.max(Math.ceil(nameLines_check.length * LINE_H) + PAD_Y * 2 + noteH, 52);
 }
 function measureSection(ctx, sec, colW, fonts) {
     let h = sec.title ? (sec.titleSize || 24) + 16 : 0;
-    for (const item of sec.items) h += measureItemRow(ctx, item, colW, fonts, sec.bodySize || 20);
+    for (const item of sec.items) h += measureItemRow(ctx, item, colW, fonts, sec.bodySize || 20, sec.numSize || 35);
     if (sec.items.length > 0) h += 1;
     return h;
 }
@@ -2428,7 +2446,7 @@ window.onload = () => {
         addItemRow({ itemName: '하안검 실리프팅', p1: '40만원' });
         addItemRow({ itemName: '얼굴전체 탄력리프팅', p1Label: '1회', p1: '50만원', p2Label: '3회', p2: '120만원' });
         saveSnapshot();
-        generateImages();
+        document.fonts.ready.then(() => generateImages());
     }
     applyColumnTabFilter();
     initBookmarkObserver();
@@ -2453,6 +2471,7 @@ window.onload = () => {
     let _colBtnHoveredSection = null;
 
     function showColInsertBtn(section) {
+        if (activeColumnTab !== 'all') return;
         clearTimeout(_colBtnHideTimer);
         const rect = section.getBoundingClientRect();
         const moveMode = Array.from(document.getElementById('itemsContainer').children)
@@ -2512,4 +2531,17 @@ window.onload = () => {
     });
 
     markSaved();
+
+    // 리모컨 패널을 미리보기 카드 우측 끝에서 gap: 20px 위치에 고정
+    function updateRemotePanelPosition() {
+        const previewCard = document.querySelector('.preview-card');
+        const remotePanel = document.getElementById('remotePanel');
+        if (!previewCard || !remotePanel) return;
+        const rect = previewCard.getBoundingClientRect();
+        const gap = 20;
+        const right = window.innerWidth - rect.right - gap - remotePanel.offsetWidth;
+        remotePanel.style.right = Math.max(right, 8) + 'px';
+    }
+    updateRemotePanelPosition();
+    window.addEventListener('resize', updateRemotePanelPosition);
 };
