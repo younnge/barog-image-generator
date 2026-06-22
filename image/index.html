@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"
         integrity="sha512-Qlv6VSKh1gDKGoJbnyA5RMXYcvnpIqhO++MhIM2fStMcGT9i2T//tSwYFlcyoRRDcDZ+TYHpH8azBBCyhpSeqw=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <link rel="stylesheet" href="style.css?v=20260622p">
+    <link rel="stylesheet" href="style.css?v=20260622q">
 </head>
 <body>
     <div class="bg-blur">
@@ -233,32 +233,32 @@
 
     <!-- ===== 플로팅 리모컨 ===== -->
     <div class="remote-panel" id="remotePanel">
-        <button class="rbtn" id="remoteUndo" title="실행취소 (Ctrl+Z)" disabled>
+        <button class="rbtn" id="remoteUndo" title="실행취소 (Ctrl+Z)" aria-label="실행취소" disabled>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
         </button>
-        <button class="rbtn" id="remoteRedo" title="다시실행 (Ctrl+Y)" disabled>
+        <button class="rbtn" id="remoteRedo" title="다시실행 (Ctrl+Y)" aria-label="다시실행" disabled>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
         </button>
         <div class="remote-divider"></div>
-        <button class="rbtn rbtn-primary" id="remoteDownload" title="이미지 다운로드 (JPG)">
+        <button class="rbtn rbtn-primary" id="remoteDownload" title="이미지 다운로드 (JPG)" aria-label="이미지 다운로드">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </button>
-        <button class="rbtn rbtn-danger" id="remoteSaveBtn" title="백업 저장 (Ctrl+S)">
+        <button class="rbtn rbtn-danger" id="remoteSaveBtn" title="백업 저장 (Ctrl+S)" aria-label="백업 저장">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         </button>
-        <button class="rbtn" id="remoteLoadBtn" title="백업 불러오기">
+        <button class="rbtn" id="remoteLoadBtn" title="백업 불러오기" aria-label="백업 불러오기">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         </button>
         <div class="remote-divider"></div>
-        <button class="rbtn" id="remoteGoTop" title="항목 맨 위로">
+        <button class="rbtn" id="remoteGoTop" title="항목 맨 위로" aria-label="항목 맨 위로">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
         </button>
-        <button class="rbtn" id="remoteGoBottom" title="항목 맨 아래로">
+        <button class="rbtn" id="remoteGoBottom" title="항목 맨 아래로" aria-label="항목 맨 아래로">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
         </button>
         <input type="file" id="loadFileInput" accept=".json" style="display:none">
     </div>
 
-    <script src="main.js?v=20260622p"></script>
+    <script src="main.js?v=20260622q"></script>
 </body>
 </html>

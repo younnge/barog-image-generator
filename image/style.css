@@ -787,6 +787,8 @@ body {
 }
 .status-chip.generating { background: rgba(255,149,0,0.1); color: #FF9500; }
 .status-chip.done { background: rgba(52,199,89,0.1); color: #34C759; }
+.status-chip.warn { background: rgba(255,59,48,0.1); color: #FF3B30; }
+.status-chip.error { background: rgba(255,59,48,0.12); color: #FF3B30; }
 
 #previewContainer {
     flex: 1; overflow-y: auto;

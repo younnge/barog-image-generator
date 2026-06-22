@@ -1973,15 +1973,20 @@ function measurePageHeightAtScale(page, scale) {
     return total;
 }
 
+/* 헤더 높이를 반영한 컨텐츠 영역 가용 세로 높이(px). 넘침 판정·자동 크기 공통 사용. */
+function availableContentHeight() {
+    const { H } = CONFIG, MARGIN = 41;
+    const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '28', 10)) / 100;
+    const headerH = Math.round(H * headerRatio);
+    return (H - MARGIN) - (headerH + (headerH > 0 ? HEADER_CONTENT_GAP : MARGIN));
+}
+
 /* '균등 맞춤' 시 1회성 자동 크기: 더 긴 컬럼이 페이지를 넘치지 않는 최대 전체 크기를
  * 70~150% 중 5% 단위로 찾아 슬라이더에 적용 (이후 사용자가 자유롭게 재조절 가능). */
 function autoFitTextScale() {
     const slider = document.getElementById('textScale');
     if (!slider) return;
-    const { H } = CONFIG, MARGIN = 41;
-    const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '28', 10)) / 100;
-    const headerH = Math.round(H * headerRatio);
-    const available = (H - MARGIN) - (headerH + (headerH > 0 ? HEADER_CONTENT_GAP : MARGIN));
+    const available = availableContentHeight();
     const pages = parseDomToPages();
     if (!pages.length) return;
     pages.forEach(page => page.rows.forEach(row => { if (row.type === 'split' && row.right.length === 0) balanceRow(row); }));
@@ -2030,36 +2035,51 @@ function generateImages() {
     const textScale = (parseInt(document.getElementById('textScale')?.value || '100', 10)) / 100;
 
     requestAnimationFrame(() => {
-        // 컬럼 구분선이 있을 때만 2컬럼, 없으면 전체 너비 1열로 렌더링
-        if (textScale !== 1) {
-            pages.forEach(page => {
-                page.rows.forEach(row => {
-                    const secs = row.type === 'full' ? [row.section] : [...row.left, ...row.right];
-                    secs.forEach(sec => {
-                        sec.titleSize = Math.round((sec.titleSize || 24) * textScale);
-                        sec.bodySize  = Math.round((sec.bodySize  || 20) * textScale);
-                        sec.numSize   = Math.round((sec.numSize   || 35) * textScale);
+        try {
+            // 넘침 판정: 크기 적용 전 원본 크기 + 현재 배율로 최소 컨텐츠 높이를 측정해 가용 높이와 비교.
+            // (실제 그리기는 넘친 부분을 조용히 잘라내므로, 잘림 여부를 사용자에게 알림)
+            const avail = availableContentHeight();
+            const overflow = pages.some(p => measurePageHeightAtScale(p, textScale) > avail + 1);
+
+            // 컬럼 구분선이 있을 때만 2컬럼, 없으면 전체 너비 1열로 렌더링
+            if (textScale !== 1) {
+                pages.forEach(page => {
+                    page.rows.forEach(row => {
+                        const secs = row.type === 'full' ? [row.section] : [...row.left, ...row.right];
+                        secs.forEach(sec => {
+                            sec.titleSize = Math.round((sec.titleSize || 24) * textScale);
+                            sec.bodySize  = Math.round((sec.bodySize  || 20) * textScale);
+                            sec.numSize   = Math.round((sec.numSize   || 35) * textScale);
+                        });
                     });
                 });
+            }
+            const canvases = pages.map(page =>
+                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, labelBoxColor, layoutBalanced)
+            );
+
+            generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
+
+            previewContainer.innerHTML = '';
+            generatedImagesUrls.forEach((url, i) => {
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = `A4 이미지 ${i + 1}`;
+                previewContainer.appendChild(img);
             });
-        }
-        const canvases = pages.map(page =>
-            drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, labelBoxColor, layoutBalanced)
-        );
 
-        generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
-
-        previewContainer.innerHTML = '';
-        generatedImagesUrls.forEach((url, i) => {
-            const img = document.createElement('img');
-            img.src = url;
-            img.alt = `A4 이미지 ${i + 1}`;
-            previewContainer.appendChild(img);
-        });
-
-        if (statusChip) {
-            statusChip.textContent = `${pages.length}페이지 완료`;
-            statusChip.className = 'status-chip done';
+            if (statusChip) {
+                if (overflow) {
+                    statusChip.textContent = '⚠ 내용이 넘쳐 일부가 잘렸습니다 — 텍스트 크기 축소·컬럼 분리 권장';
+                    statusChip.className = 'status-chip warn';
+                } else {
+                    statusChip.textContent = `${pages.length}페이지 완료`;
+                    statusChip.className = 'status-chip done';
+                }
+            }
+        } catch (err) {
+            console.error('이미지 생성 실패:', err);
+            if (statusChip) { statusChip.textContent = '생성 중 오류 발생'; statusChip.className = 'status-chip error'; }
         }
     });
 }
@@ -2328,7 +2348,17 @@ function hideBgThumb() {
 /* ============================================================
  * 프로젝트 저장 / 불러오기
  * ============================================================ */
+/* CDN(JSZip/FileSaver) 로드 여부 확인. 차단·오프라인 시 친절히 안내. */
+function ensureSaveLib() {
+    if (typeof saveAs === 'undefined') {
+        showColorToast('저장 라이브러리를 불러오지 못했습니다. 네트워크 연결 후 새로고침해 주세요.');
+        return false;
+    }
+    return true;
+}
+
 function saveProject() {
+    if (!ensureSaveLib()) return;
     const data = getSnapshot();
     if (cachedBgImg?.src?.startsWith('data:')) {
         data.bgImage = cachedBgImg.src;
@@ -2359,7 +2389,7 @@ function loadProject(event) {
                 generateImages();
                 markSaved();
             }
-        } catch(err) { alert('잘못된 백업 파일입니다.'); }
+        } catch(err) { showColorToast('잘못된 백업 파일입니다.'); }
     };
     reader.readAsText(file);
     event.target.value = '';
@@ -2375,6 +2405,9 @@ function downloadImages() {
         a.href = generatedImagesUrls[0]; a.download = 'A4이벤트_01.jpg';
         document.body.appendChild(a); a.click(); a.remove();
     } else {
+        if (typeof JSZip === 'undefined' || typeof saveAs === 'undefined') {
+            return showColorToast('압축 라이브러리를 불러오지 못했습니다. 네트워크 연결 후 새로고침해 주세요.');
+        }
         const zip = new JSZip();
         const now = new Date();
         const ds = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
@@ -2708,7 +2741,7 @@ window.onload = () => {
     bgInput.addEventListener('change', e => {
         if (!e.target.files?.length) { cachedBgImg = null; hideBgThumb(); debouncedGenerateImages(); return; }
         const file = e.target.files[0];
-        if (file.size > 20 * 1024 * 1024) { alert('이미지 파일 크기는 20MB 이하로 선택해 주세요.'); e.target.value = ''; return; }
+        if (file.size > 20 * 1024 * 1024) { showColorToast('이미지 파일 크기는 20MB 이하로 선택해 주세요.'); e.target.value = ''; return; }
         saveSnapshot();
         const reader = new FileReader();
         reader.onload = ev => {
@@ -2727,7 +2760,7 @@ window.onload = () => {
         e.preventDefault(); saveSnapshot();
         const file = e.dataTransfer.files[0];
         if (!file?.type.startsWith('image/')) return;
-        if (file.size > 20 * 1024 * 1024) { alert('이미지 파일 크기는 20MB 이하로 선택해 주세요.'); return; }
+        if (file.size > 20 * 1024 * 1024) { showColorToast('이미지 파일 크기는 20MB 이하로 선택해 주세요.'); return; }
         const reader = new FileReader();
         reader.onload = ev => {
             const img = new Image(); img.src = ev.target.result;
@@ -3047,8 +3080,10 @@ window.onload = () => {
         addItemRow({ itemName: '하안검 실리프팅', p1: '40만원' });
         addItemRow({ itemName: '얼굴전체 탄력리프팅', p1Label: '1회', p1: '50만원', p2Label: '3회', p2: '120만원' });
         saveSnapshot();
-        document.fonts.ready.then(() => generateImages());
     }
+    // 폰트 로딩 완료 후 정확한 메트릭으로 1회 재렌더 (복원·샘플 공통).
+    // 폰트가 늦게 로드되면 측정값이 어긋나므로 fonts.ready 시점에 한 번 더 그린다.
+    document.fonts.ready.then(() => generateImages());
     applyColumnTabFilter();
     initBookmarkObserver();
     refreshBookmarks();
