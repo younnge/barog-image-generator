@@ -393,9 +393,9 @@ function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, ti
                 </div>
             </div>
             <div style="display:flex;gap:4px;align-self:flex-end;margin-bottom:2px;">
-                <button class="btn-copy btn-opts-settings js-toggle-sec-opts" title="옵션">${OPTS_SVG}</button>
-                <button class="btn-copy js-dup-section" title="복제">${COPY_SVG}</button>
-                <button class="btn-remove js-del-section" title="삭제">${CLOSE_SVG}</button>
+                <button class="btn-copy btn-opts-settings js-toggle-sec-opts" title="옵션" aria-label="섹션 옵션">${OPTS_SVG}</button>
+                <button class="btn-copy js-dup-section" title="복제" aria-label="섹션 복제">${COPY_SVG}</button>
+                <button class="btn-remove js-del-section" title="삭제" aria-label="섹션 삭제">${CLOSE_SVG}</button>
             </div>
         </div>
         <div class="section-opts-row">
@@ -460,7 +460,7 @@ function readPriceSlots(el) {
 function buildPriceSlotEl(n, label = '', val = '') {
     const div = document.createElement('div');
     div.className = 'price-slot';
-    div.innerHTML = `<input type="text" class="btn-input price-label-input price-label-${n}" placeholder="단위" value="${escapeHtml(label)}"><input type="text" class="btn-input price-val-input price-val-${n}" placeholder="금액" value="${escapeHtml(val)}"><button class="btn-dup-price-slot js-dup-price-slot" title="슬롯 복제">${COPY_SVG}</button><button class="btn-remove-price-slot js-remove-price-slot" title="슬롯 삭제">−</button>`;
+    div.innerHTML = `<input type="text" class="btn-input price-label-input price-label-${n}" placeholder="단위" value="${escapeHtml(label)}"><input type="text" class="btn-input price-val-input price-val-${n}" placeholder="금액" value="${escapeHtml(val)}"><button class="btn-dup-price-slot js-dup-price-slot" title="슬롯 복제" aria-label="가격 슬롯 복제">${COPY_SVG}</button><button class="btn-remove-price-slot js-remove-price-slot" title="슬롯 삭제" aria-label="가격 슬롯 삭제">−</button>`;
     return div;
 }
 
@@ -506,12 +506,12 @@ function addItemRow(itemData = {}) {
             <input type="checkbox" class="item-sublabel" style="display:none" ${isSublabel ? 'checked' : ''}>
             <button class="btn-action-text js-toggle-sublabel${isSublabel ? ' btn-action-active' : ''}" title="소제목 행으로 표시 (가격 없이 강조 행)">소제목</button>
             <button class="btn-action-text js-toggle-note${note ? ' btn-action-active' : ''}" title="비고 텍스트 추가">비고</button>
-            <button class="btn-copy js-dup-item" title="복제">${COPY_SVG}</button>
-            <button class="btn-remove js-del-item" title="삭제">${CLOSE_SVG}</button>
+            <button class="btn-copy js-dup-item" title="복제" aria-label="항목 복제">${COPY_SVG}</button>
+            <button class="btn-remove js-del-item" title="삭제" aria-label="항목 삭제">${CLOSE_SVG}</button>
         </div>
         <div class="item-prices-row${isSublabel ? ' hidden' : ''}">
             <div class="price-slots-wrap"></div>
-            <button class="btn-add-price-slot js-add-price-slot" title="가격 슬롯 추가">+</button>
+            <button class="btn-add-price-slot js-add-price-slot" title="가격 슬롯 추가" aria-label="가격 슬롯 추가">+</button>
         </div>
         <div class="item-note-row${note ? '' : ' hidden'}">
             <input type="text" class="btn-input item-note-input" placeholder="※ 비고 (작은글씨)" value="${escapeHtml(note)}">
@@ -545,7 +545,7 @@ function addColumnBreak(undoId = null) {
     wrapper.innerHTML = `
         <div class="drag-handle">${DRAG_SVG}</div>
         <div class="column-break-line">↔ 여기서 오른쪽 컬럼으로 분리 ↔</div>
-        <button class="btn-remove js-del-colbreak" title="삭제">${CLOSE_SVG}</button>
+        <button class="btn-remove js-del-colbreak" title="삭제" aria-label="컬럼 구분 삭제">${CLOSE_SVG}</button>
     `;
     container.appendChild(wrapper);
     initDragAndDrop(wrapper);
@@ -1000,27 +1000,39 @@ function tokenize(text) {
     push(); return tokens;
 }
 
+/* 짝 없는 닫기 토큰의 원래 문자 복원(텍스트 유실 방지용). */
+function closeTokenLiteral(t) {
+    if (t.type === 'CLOSE_BRACE') return '}';
+    const d = t.sizeDelta || 0;
+    return (d > 0 ? '+'.repeat(d) : d < 0 ? '-'.repeat(-d) : '') + '>';
+}
+
 function parse(tokens) {
     let pos = 0;
-    function parseBlock() {
+    // top=true(최상위)에서는 짝 없는 닫기 토큰(>,})을 리터럴 텍스트로 흡수해 뒤 텍스트 유실을 막는다.
+    // 중첩 호출(top=false)에서는 기존대로 닫기에서 break 하여 부모 여는 토큰이 소비하게 둔다.
+    function parseBlock(top) {
         const nodes = [];
         while (pos < tokens.length) {
             const t = tokens[pos];
             if (t.type === 'TEXT') { nodes.push({ type: 'TEXT', value: t.value }); pos++; }
             else if (t.type === 'OPEN_ANGLE') {
-                pos++; const children = parseBlock();
+                pos++; const children = parseBlock(false);
                 let cd = 0;
                 if (pos < tokens.length && tokens[pos].type === 'CLOSE_ANGLE') { cd = tokens[pos].sizeDelta; pos++; }
                 nodes.push({ type: 'ANGLE', sizeDelta: t.sizeDelta || cd, children });
             } else if (t.type === 'OPEN_BRACE') {
-                pos++; const children = parseBlock();
+                pos++; const children = parseBlock(false);
                 if (pos < tokens.length && tokens[pos].type === 'CLOSE_BRACE') pos++;
                 nodes.push({ type: 'BRACE', children });
+            } else if (top) {
+                // 짝 없는 닫기 토큰 → 리터럴 텍스트로 처리하고 계속 파싱
+                nodes.push({ type: 'TEXT', value: closeTokenLiteral(t) }); pos++;
             } else break;
         }
         return nodes;
     }
-    return parseBlock();
+    return parseBlock(true);
 }
 
 function flattenAST(nodes, state) {
@@ -2040,6 +2052,8 @@ function generateImages() {
             // (실제 그리기는 넘친 부분을 조용히 잘라내므로, 잘림 여부를 사용자에게 알림)
             const avail = availableContentHeight();
             const overflow = pages.some(p => measurePageHeightAtScale(p, textScale) > avail + 1);
+            // 헤더 높이 0 → 제목·기간·우측텍스트가 출력에서 빠짐(밴드 공간이 없어 의도된 동작이나 사용자에게 알림)
+            const headerTextDropped = headerRatio === 0 && !!(topText || periodText || periodNote);
 
             // 컬럼 구분선이 있을 때만 2컬럼, 없으면 전체 너비 1열로 렌더링
             if (textScale !== 1) {
@@ -2071,6 +2085,9 @@ function generateImages() {
             if (statusChip) {
                 if (overflow) {
                     statusChip.textContent = '⚠ 내용이 넘쳐 일부가 잘렸습니다 — 텍스트 크기 축소·컬럼 분리 권장';
+                    statusChip.className = 'status-chip warn';
+                } else if (headerTextDropped) {
+                    statusChip.textContent = '⚠ 헤더 높이가 0이라 제목·기간이 표시되지 않습니다';
                     statusChip.className = 'status-chip warn';
                 } else {
                     statusChip.textContent = `${pages.length}페이지 완료`;

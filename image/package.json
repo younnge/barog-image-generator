@@ -1,0 +1,9 @@
+{
+  "name": "barog-image-generator",
+  "version": "1.0.0",
+  "description": "원내이미지(이벤트 전단지) A4 생성기 — 클라이언트 전용 정적 웹앱",
+  "private": true,
+  "scripts": {
+    "test": "node tests/logic.test.js"
+  }
+}
