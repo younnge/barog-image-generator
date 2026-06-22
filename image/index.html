@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"
         integrity="sha512-Qlv6VSKh1gDKGoJbnyA5RMXYcvnpIqhO++MhIM2fStMcGT9i2T//tSwYFlcyoRRDcDZ+TYHpH8azBBCyhpSeqw=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260622p">
 </head>
 <body>
     <div class="bg-blur">
@@ -183,6 +183,7 @@
                         <span class="items-tab-title">항목 구성</span>
                         <div style="display:flex;gap:6px;align-items:center;">
                             <span class="colsplit-hint" id="colSplitHint"></span>
+                            <button class="btn-toggle-all" id="btnBalance" title="좌우 컬럼 높이를 자동으로 균등 배분하고 남는 간격을 균등 분배합니다">좌우 균등 맞춤</button>
                             <button class="btn-toggle-all" id="btnToggleAll">모두 접기</button>
                         </div>
                     </div>
@@ -258,6 +259,6 @@
         <input type="file" id="loadFileInput" accept=".json" style="display:none">
     </div>
 
-    <script src="main.js"></script>
+    <script src="main.js?v=20260622p"></script>
 </body>
 </html>

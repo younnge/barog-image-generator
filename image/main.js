@@ -5,6 +5,7 @@ let generatedImagesUrls = [];
 let cachedBgImg = null;
 let isBackedUp = true;
 let activeColumnTab = 'all';
+let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
 let undoHistory = [];
 let redoHistory = [];
 const MAX_UNDO = 100;
@@ -194,6 +195,7 @@ function getSnapshot() {
         labelBoxColor: document.getElementById('labelBoxColorHex')?.value || '#000000',
         headerHeight: document.getElementById('headerHeight')?.value || '28',
         textScale: document.getElementById('textScale')?.value || '100',
+        balanced: layoutBalanced,
         items
     };
 }
@@ -226,6 +228,8 @@ function updateRemoteState() {
 function restoreSnapshot(data) {
     if (typeof data === 'string') data = JSON.parse(data);
     if (!data) return;
+    layoutBalanced = !!data.balanced;
+    updateBalanceBtn();
     if (data.topText !== undefined) { const el = document.getElementById('topText'); el.value = data.topText; autoResizeTextarea(el); }
     if (data.periodText !== undefined) document.getElementById('periodText').value = data.periodText;
     if (data.periodNote !== undefined) document.getElementById('periodNote').value = data.periodNote;
@@ -316,6 +320,8 @@ function applyColumnTabFilter() {
 
     const colBtn = document.getElementById('addColumnBreakBtn');
     if (colBtn) colBtn.style.display = activeColumnTab === 'all' ? '' : 'none';
+
+    resizeVisibleTextareas();   // 새로 보이게 된 컬럼의 입력칸 높이 재계산
 }
 
 /* ============================================================
@@ -432,6 +438,7 @@ function addSectionTitle(titleValue = '', isCollapsed = false, undoId = null, ti
     setTimeout(() => autoResizeTextarea(wrapper.querySelector('.section-title-input')), 0);
     refreshAccordionVisibility();
     debouncedGenerateImages();
+    return wrapper;
 }
 
 function readPriceSlots(el) {
@@ -527,6 +534,7 @@ function addItemRow(itemData = {}) {
     setTimeout(() => { const ta = row.querySelector('.item-name'); if (ta) autoResizeTextarea(ta); }, 0);
     refreshAccordionVisibility();
     debouncedGenerateImages();
+    return row;
 }
 
 function addColumnBreak(undoId = null) {
@@ -548,7 +556,24 @@ function addColumnBreak(undoId = null) {
 
 function autoResizeTextarea(el) {
     el.style.height = '1px';
-    el.style.height = Math.max(32, el.scrollHeight) + 'px';
+    const sh = el.scrollHeight;
+    const max = parseFloat(getComputedStyle(el).maxHeight);   // CSS max-height (px) 또는 NaN(none)
+    if (!isNaN(max) && sh > max) {
+        el.style.height = max + 'px';
+        el.style.overflowY = 'auto';     // 최대 높이 초과 → 내부 스크롤
+    } else {
+        el.style.height = Math.max(32, sh) + 'px';
+        el.style.overflowY = 'hidden';
+    }
+}
+
+/* 보이는 항목명/섹션제목 textarea 를 내용 높이에 맞춰 재확장.
+ * 숨김(display:none) 상태에선 scrollHeight 가 부정확하므로, 탭/컬럼 전환 등으로
+ * 다시 보이게 될 때 호출해 잘림(1줄 고정)을 방지. */
+function resizeVisibleTextareas() {
+    document.querySelectorAll('#itemsContainer .item-name, #itemsContainer .section-title-input').forEach(ta => {
+        if (ta.offsetParent !== null) autoResizeTextarea(ta);
+    });
 }
 
 function toggleSection(wrapper) {
@@ -635,7 +660,12 @@ function refreshBookmarks() {
         const isActive = !node.classList.contains('collapsed');
         entry.className = 'bm-entry bm-section' + (isActive ? ' bm-active' : '');
         entry.textContent = title;
-        entry.addEventListener('click', () => {
+        entry._sectionNode = node;   // 대응하는 섹션 헤더 DOM
+        entry._side = side;
+        entry.addEventListener('mousedown', onBmDragStart);
+        entry.addEventListener('touchstart', onBmDragStart, { passive: false });
+        entry.addEventListener('click', e => {
+            if (bmSuppressClick) { bmSuppressClick = false; return; }   // 드래그 직후 클릭 무시
             if (side && side !== activeColumnTab) {
                 activeColumnTab = side;
                 applyColumnTabFilter();
@@ -676,6 +706,112 @@ function refreshBookmarks() {
             }
         });
     }
+}
+
+/* ===== 북마크 드래그로 이벤트(섹션) 순서 변경 — 상하(같은 컬럼)·좌우(컬럼 간) ===== */
+let bmDragSrc = null, bmDragMoved = false, bmSuppressClick = false, bmStartX = 0, bmStartY = 0;
+
+function onBmDragStart(e) {
+    bmDragSrc = e.currentTarget;
+    bmDragMoved = false;
+    bmSuppressClick = false;   // 새 상호작용 — 이전 드래그의 잔여 플래그 제거
+    const p = e.touches ? e.touches[0] : e;
+    bmStartX = p.clientX; bmStartY = p.clientY;
+    if (e.touches) {
+        document.addEventListener('touchmove', onBmDragMove, { passive: false });
+        document.addEventListener('touchend', onBmDragEnd);
+    } else {
+        document.addEventListener('mousemove', onBmDragMove);
+        document.addEventListener('mouseup', onBmDragEnd);
+    }
+}
+
+function onBmDragMove(e) {
+    if (!bmDragSrc) return;
+    const p = e.touches ? e.touches[0] : e;
+    if (!bmDragMoved) {
+        if (Math.hypot(p.clientX - bmStartX, p.clientY - bmStartY) < 5) return;  // 임계값: 클릭과 구분
+        bmDragMoved = true;
+        bmDragSrc.classList.add('bm-dragging');
+    }
+    if (e.cancelable) e.preventDefault();
+
+    const list = document.getElementById('bookmarkList');
+    // 대상 컬럼 결정 (2열이면 X로, 아니면 단일 리스트)
+    let targetCol = list;
+    if (list.classList.contains('bm-two-col')) {
+        const cols = Array.from(list.querySelectorAll('.bm-col'));
+        targetCol = cols.reduce((best, col) => {
+            const r = col.getBoundingClientRect();
+            const cx = r.left + r.width / 2;
+            const d = Math.abs(p.clientX - cx);
+            return (!best || d < best.d) ? { col, d } : best;
+        }, null).col;
+    }
+    // 같은 컬럼 내 삽입 위치(Y 중점 기준)
+    const entries = Array.from(targetCol.querySelectorAll('.bm-entry')).filter(en => en !== bmDragSrc);
+    let before = null;
+    for (const en of entries) {
+        const r = en.getBoundingClientRect();
+        if (p.clientY < r.top + r.height / 2) { before = en; break; }
+    }
+    before ? targetCol.insertBefore(bmDragSrc, before) : targetCol.appendChild(bmDragSrc);
+}
+
+function onBmDragEnd() {
+    document.removeEventListener('mousemove', onBmDragMove);
+    document.removeEventListener('mouseup', onBmDragEnd);
+    document.removeEventListener('touchmove', onBmDragMove);
+    document.removeEventListener('touchend', onBmDragEnd);
+    const moved = bmDragMoved;
+    if (bmDragSrc) bmDragSrc.classList.remove('bm-dragging');
+    bmDragSrc = null; bmDragMoved = false;
+    if (moved) {
+        bmSuppressClick = true;        // 바로 뒤따르는 click(내비게이션) 무시
+        applyBookmarkOrderToDom();
+    }
+}
+
+/* 북마크 패널의 현재 순서대로 itemsContainer 의 섹션 블록을 재배치.
+ * 2열이면 [좌측 컬럼 순서][구분선][우측 컬럼 순서], 전체폭·헤더없는 항목은 상단 유지. */
+function applyBookmarkOrderToDom() {
+    const list = document.getElementById('bookmarkList');
+    const container = document.getElementById('itemsContainer');
+    const blocks = collectSectionBlocks();
+    const blockOf = new Map(blocks.map(b => [b.wrapper, b]));
+    const twoCol = list.classList.contains('bm-two-col');
+
+    let leftNodes = [], rightNodes = [];
+    if (twoCol) {
+        const cols = list.querySelectorAll('.bm-col');
+        leftNodes = Array.from(cols[0]?.querySelectorAll('.bm-entry') || []).map(en => en._sectionNode);
+        rightNodes = Array.from(cols[1]?.querySelectorAll('.bm-entry') || []).map(en => en._sectionNode);
+    } else {
+        leftNodes = Array.from(list.querySelectorAll('.bm-entry')).map(en => en._sectionNode);
+    }
+    const ordered = new Set([...leftNodes, ...rightNodes]);
+    // 북마크에 없는 블록(헤더없는 항목 등)은 상단 유지
+    const leadBlocks = blocks.filter(b => !ordered.has(b.wrapper));
+
+    const order = [];
+    const pushBlock = b => { if (!b) return; if (b.wrapper) order.push(b.wrapper); order.push(...b.items); };
+    leadBlocks.forEach(pushBlock);
+    leftNodes.forEach(n => pushBlock(blockOf.get(n)));
+    if (twoCol) {
+        const breaks = Array.from(container.querySelectorAll('.column-break-wrapper'));
+        breaks.slice(1).forEach(b => b.remove());
+        let brk = breaks[0];
+        if (!brk) { addColumnBreak(); brk = container.querySelector('.column-break-wrapper'); }
+        order.push(brk);
+        rightNodes.forEach(n => pushBlock(blockOf.get(n)));
+    }
+    order.forEach(n => container.appendChild(n));
+
+    refreshAccordionVisibility();
+    applyColumnTabFilter();
+    refreshBookmarks();
+    saveSnapshot();
+    debouncedGenerateImages();
 }
 
 function scrollToItem(el) {
@@ -779,14 +915,22 @@ function onDragMouseDown(e) {
 }
 function onDragMouseMove(e) {
     if (!dragSrc) return;
+    placeDraggedItem(e.clientY);
+}
+/* 현재 컬럼 탭(좌/우/전체) 경계를 벗어나지 않도록 드래그 위치를 계산해 배치 */
+function placeDraggedItem(clientY) {
     const container = document.getElementById('itemsContainer');
-    const els = Array.from(container.children).filter(c => c !== dragSrc && !c.classList.contains('items-empty-hint'));
-    const mouseY = e.clientY;
+    const breakEl = container.querySelector('.column-break-wrapper');
+    // 숨겨진 항목(다른 컬럼)은 후보에서 제외 — 보이는 항목만으로 삽입 지점 판단
+    const els = Array.from(container.children).filter(c =>
+        c !== dragSrc && !c.classList.contains('items-empty-hint') && c.style.display !== 'none');
     let insertBefore = null;
     for (const el of els) {
         const rect = el.getBoundingClientRect();
-        if (mouseY < rect.top + rect.height / 2) { insertBefore = el; break; }
+        if (clientY < rect.top + rect.height / 2) { insertBefore = el; break; }
     }
+    // 맨 아래로 드롭 시: 좌측 탭에서는 컬럼 구분선 앞까지만 (우측 컬럼 침범 방지)
+    if (!insertBefore && activeColumnTab === 'left' && breakEl) insertBefore = breakEl;
     insertBefore ? container.insertBefore(dragSrc, insertBefore) : container.appendChild(dragSrc);
 }
 function onDragMouseUp() {
@@ -810,15 +954,7 @@ function onDragTouchStart(e) {
 function onDragTouchMove(e) {
     e.preventDefault();
     if (!dragSrc) return;
-    const touch = e.touches[0];
-    const container = document.getElementById('itemsContainer');
-    const els = Array.from(container.children).filter(c => c !== dragSrc && !c.classList.contains('items-empty-hint'));
-    let insertBefore = null;
-    for (const el of els) {
-        const rect = el.getBoundingClientRect();
-        if (touch.clientY < rect.top + rect.height / 2) { insertBefore = el; break; }
-    }
-    insertBefore ? container.insertBefore(dragSrc, insertBefore) : container.appendChild(dragSrc);
+    placeDraggedItem(e.touches[0].clientY);
 }
 function onDragTouchEnd() {
     if (!dragSrc) return;
@@ -917,7 +1053,7 @@ function parseStyledText(text) {
 
 function getChunkFont(chunk, baseSize, isBold, fonts) {
     const size = Math.max(8, baseSize + chunk.sizeDelta * SIZE_STEP);
-    const weight = chunk.boldLevel >= 2 ? 900 : chunk.boldLevel === 1 ? 800 : isBold ? 700 : 600;
+    const weight = chunk.boldLevel >= 2 ? 900 : chunk.boldLevel === 1 ? 800 : isBold ? 700 : 500;
     const family = isBold || chunk.boldLevel > 0 ? fonts.bold : fonts.main;
     return { font: `${weight} ${size}px ${family}`, size };
 }
@@ -977,28 +1113,68 @@ function roundRect(ctx, x, y, w, h, r) {
 /* ============================================================
  * 섹션 높이 측정 (배경 위 카드 배경 그리기용 사전 계산)
  * ============================================================ */
-function measureItemRow(ctx, item, colW, fonts, bodySize = 20, numSize = 35) {
-    if (item.isSublabel) return 44;
-    const NAME_SIZE = bodySize, PAD_Y = 12, NOTE_SIZE = 17;
-    const PAD_X = 18;
-    const getLineH = (line) => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
-    const nameLines_check = wrapStyledText(ctx, item.itemName, Math.floor(colW - PAD_X * 2), NAME_SIZE, false, fonts);
-    const noteH = item.note ? (NOTE_SIZE * 1.5 + 2) : 0;
+/* 항목명 줄 간격(행간) 배수. 1.0 = 글자 크기와 동일(빡빡), 1.2 = 약간 여유 */
+const ITEM_LINE_HEIGHT = 1.2;
+/* 비고 텍스트와 윗 내용 사이 간격(스택 모드). 작을수록 비고가 위 내용에 붙음 */
+const NOTE_TOP_GAP = 4;
+/* 가격을 이름 우측에 나란히 둘지(false) 아래로 내릴지(스택) 판단용.
+ * 가격을 뺀 이름 폭이 전체의 STACK_MIN_NAME_RATIO 미만이면 스택. */
+const STACK_SIDE_GAP = 12;
+const STACK_MIN_NAME_RATIO = 0.42;
+/* 여러 줄 항목명의 세로 높이. 줄 사이 간격에만 행간 배수를 적용(첫·끝 줄 반높이 포함).
+ * f=1 이면 단순 합과 동일 → 측정/그리기 양쪽에서 같은 식 사용. */
+function nameBlockHeight(lineHeights, f) {
+    const n = lineHeights.length;
+    if (!n) return 0;
+    let h = (lineHeights[0] + lineHeights[n - 1]) / 2;
+    for (let i = 1; i < n; i++) h += (lineHeights[i - 1] + lineHeights[i]) / 2 * f;
+    return h;
+}
+/* 항목 레이아웃 판정: 가격을 이름 우측에 나란히(side) vs 아래로(stack).
+ * 두 레이아웃의 본문 높이를 모두 계산해 더 낮은 쪽 선택 + 이름 최소폭 가드(과한 줄바꿈 방지).
+ * 측정·그리기가 동일 결과를 쓰도록 공통 사용. */
+function computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize) {
+    const PAD_X = 18, PAD_Y = 12, PRICE_TIER_H = 35, PRICE_ROW_GAP = 6, PRICE_GAP = 1;
+    const innerW = colW - PAD_X * 2;
+    const getLineH = line => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
+    const blockH = lines => nameBlockHeight(lines.map(getLineH), ITEM_LINE_HEIGHT);
     const tiers = buildTiers(item);
     const priceW = tiers.length ? measurePriceTiersWidth(ctx, tiers, numSize, fonts) : 0;
-    const nameW_check = nameLines_check.length === 1 ? (nameLines_check[0].totalWidth || 0) : 0;
-    const isStacked = nameLines_check.length > 1 || (tiers.length > 0 && nameW_check + priceW + PAD_X > colW - PAD_X * 2);
-    if (isStacked) {
-        const PRICE_TIER_H = 35, PRICE_ROW_GAP = 6, PRICE_GAP = 1;
-        const nameLines = wrapStyledText(ctx, item.itemName, Math.floor(colW - PAD_X * 2), NAME_SIZE, false, fonts);
-        const tierRows = tiers.length ? packTierRows(ctx, tiers, colW - PAD_X * 2, numSize, fonts) : [];
-        const numPriceRows = tierRows.length || 1;
-        const priceTotalH = tiers.length ? numPriceRows * PRICE_TIER_H + (numPriceRows - 1) * PRICE_ROW_GAP : PRICE_TIER_H;
-        const nameBlockH = nameLines.reduce((s, l) => s + getLineH(l), 0);
-        return PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + priceTotalH + PAD_Y + noteH;
+
+    if (!tiers.length) {   // 가격 없음 → 전체폭 이름
+        const nameLines = wrapStyledText(ctx, item.itemName, Math.floor(innerW), NAME_SIZE, false, fonts);
+        return { tiers, isStacked: false, nameLines, nameBlockH: blockH(nameLines), tierRows: [], priceTotalH: 0 };
     }
-    const nameBlockH = nameLines_check.reduce((s, l) => s + getLineH(l), 0);
-    return Math.max(Math.ceil(nameBlockH) + PAD_Y * 2 + noteH, 52);
+
+    // 스택 레이아웃(전체폭 이름 + 아래 가격) 본문 높이
+    const fullLines = wrapStyledText(ctx, item.itemName, Math.floor(innerW), NAME_SIZE, false, fonts);
+    const tierRows = packTierRows(ctx, tiers, innerW, numSize, fonts);
+    const nRows = tierRows.length || 1;
+    const priceTotalH = nRows * PRICE_TIER_H + (nRows - 1) * PRICE_ROW_GAP;
+    const stackBodyH = PAD_Y + Math.ceil(blockH(fullLines)) + PRICE_GAP + priceTotalH + PAD_Y;
+
+    // 나란히 레이아웃: 이름 최소폭 가드 통과 + 본문 높이가 스택보다 작을 때만 채택
+    const sideNameW = innerW - priceW - STACK_SIDE_GAP;
+    if (sideNameW >= innerW * STACK_MIN_NAME_RATIO) {
+        const sideLines = wrapStyledText(ctx, item.itemName, Math.floor(sideNameW), NAME_SIZE, false, fonts);
+        const sideBodyH = Math.max(Math.ceil(blockH(sideLines)) + PAD_Y * 2, 52);
+        if (sideBodyH <= stackBodyH) {
+            return { tiers, isStacked: false, nameLines: sideLines, nameBlockH: blockH(sideLines), tierRows, priceTotalH };
+        }
+    }
+    return { tiers, isStacked: true, nameLines: fullLines, nameBlockH: blockH(fullLines), tierRows, priceTotalH };
+}
+
+function measureItemRow(ctx, item, colW, fonts, bodySize = 20, numSize = 35) {
+    if (item.isSublabel) return Math.round(bodySize * 2.2);   // 소제목 박스 높이 (본문 크기 연동)
+    const NAME_SIZE = bodySize, PAD_Y = 12, NOTE_SIZE = Math.round(bodySize * 0.85);  // 비고 (본문 크기 연동)
+    const noteH = item.note ? (NOTE_SIZE * 1.5 + 2) : 0;
+    const L = computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize);
+    if (L.isStacked) {
+        const PRICE_GAP = 1;
+        return PAD_Y + Math.ceil(L.nameBlockH) + PRICE_GAP + L.priceTotalH + (noteH ? NOTE_TOP_GAP : PAD_Y) + noteH;
+    }
+    return Math.max(Math.ceil(L.nameBlockH) + PAD_Y * 2 + noteH, 52);
 }
 function measureSection(ctx, sec, colW, fonts) {
     let h = sec.title ? (sec.titleSize || 24) + 16 : 0;
@@ -1017,10 +1193,56 @@ function collectSectionRects(ctx, sections, colX, startY, maxY, colW, fonts) {
     return rects;
 }
 
+/* 섹션 사이 기본 간격 */
+const SECTION_GAP = 15;
+/* 헤더(제목·기간) 아래와 섹션 시작 사이 간격. 작을수록 섹션이 상단 텍스트에 붙음 */
+const HEADER_CONTENT_GAP = 5;
+/* 균등 맞춤 시 섹션 사이 간격 상한 — 내용이 적어도 이 이상은 벌어지지 않음(빈 느낌 방지).
+ * 이 값을 키우면 더 꽉 채우고(간격↑), 줄이면 간격을 좁게 유지(하단 여백↑). */
+const MAX_JUSTIFY_GAP = 60;
+
+/* 오프스크린 측정 전용 컨텍스트 (높이 균형 계산용) */
+let _measureCtx = null;
+function getMeasureCtx() {
+    if (!_measureCtx) _measureCtx = document.createElement('canvas').getContext('2d');
+    return _measureCtx;
+}
+
+/* drawA4Canvas 와 동일한 2컬럼 폭 계산 (높이 균형 계산 시 사용) */
+function computeTwoColW() {
+    const { W } = CONFIG;
+    const MARGIN = 41, COL_GAP = 15;
+    return Math.floor((W - MARGIN * 2 - COL_GAP) / 2);
+}
+
+/* 한 컬럼 내 섹션 y좌표 계산.
+ * justify=true 이면 남는 세로 공간을 섹션 사이 간격에 균등 분배해 두 컬럼 하단을 맞춤.
+ * 단 간격은 MAX_JUSTIFY_GAP 으로 상한 — 내용이 적으면 상단 정렬 + 하단 여백으로 남김.
+ * 섹션이 1개뿐이면 분배할 간격이 없어 상단 정렬로 둠. */
+function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify) {
+    const heights = sections.map(sec => measureSection(ctx, sec, colW, fonts));
+    const contentH = heights.reduce((a, b) => a + b, 0);
+    let gap = SECTION_GAP;
+    if (justify && sections.length > 1) {
+        const avail = bottomY - startY - contentH;            // 남는 세로 공간
+        // 간격에 균등 분배하되 상한을 둠 — 상한 초과분은 하단 여백으로 남김(상단 정렬)
+        if (avail > 0) gap = Math.min(avail / (sections.length - 1), MAX_JUSTIFY_GAP);
+    }
+    const positions = [];
+    let y = startY;
+    for (let i = 0; i < sections.length; i++) {
+        if (y >= bottomY) break;   // 넘치면 클립 (기존 동작 유지)
+        positions.push({ sec: sections[i], y, h: heights[i] });
+        y += heights[i] + gap;
+    }
+    const last = positions[positions.length - 1];
+    return { positions, endY: last ? last.y + last.h : startY };
+}
+
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', labelBoxColor = '#000000') {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', labelBoxColor = '#000000', balance = false) {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -1048,7 +1270,7 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     }
 
     // 컨텐츠 영역
-    const contentTop = headerH + (headerH > 0 ? 15 : MARGIN);
+    const contentTop = headerH + (headerH > 0 ? HEADER_CONTENT_GAP : MARGIN);
     const contentBottom = H - MARGIN;
     const COL_GAP = 15;
     const twoColW = Math.floor((W - MARGIN * 2 - COL_GAP) / 2);
@@ -1056,55 +1278,52 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     const col1X = MARGIN;
     const col2X = MARGIN + twoColW + COL_GAP;
 
-    // 섹션 카드 흰색 배경 + 박스 그림자 (rows 기반)
-    const sectionRects = [];
-    let _y = contentTop;
-    for (const row of rows) {
-        if (_y >= contentBottom) break;
+    // 행 레이아웃 1회 계산 — 카드 배경 패스와 그리기 패스가 동일 좌표를 사용하도록.
+    // balance=true 이면 마지막 split 행에서 간격을 균등 분배해 두 컬럼 하단을 맞춤.
+    const lastRowIdx = rows.length - 1;
+    const rowLayouts = [];
+    let cy = contentTop;
+    rows.forEach((row, ri) => {
+        if (cy >= contentBottom) return;
         if (row.type === 'full') {
             const h = measureSection(ctx, row.section, fullW, fonts);
-            sectionRects.push({ x: col1X, y: _y, w: fullW, h: Math.min(h, contentBottom - _y) });
-            _y += h + 15;
+            rowLayouts.push({ type: 'full', section: row.section, y: cy, h });
+            cy += h + SECTION_GAP;
         } else {
-            let leftY = _y, rightY = _y;
-            for (const sec of row.left) {
-                if (leftY >= contentBottom) break;
-                const h = measureSection(ctx, sec, twoColW, fonts);
-                sectionRects.push({ x: col1X, y: leftY, w: twoColW, h: Math.min(h, contentBottom - leftY) });
-                leftY += h + 15;
-            }
-            for (const sec of row.right) {
-                if (rightY >= contentBottom) break;
-                const h = measureSection(ctx, sec, twoColW, fonts);
-                sectionRects.push({ x: col2X, y: rightY, w: twoColW, h: Math.min(h, contentBottom - rightY) });
-                rightY += h + 15;
-            }
-            _y = Math.max(leftY, rightY);
+            const justify = balance && ri === lastRowIdx;
+            const left = layoutColumn(ctx, row.left, cy, contentBottom, twoColW, fonts, justify);
+            const right = layoutColumn(ctx, row.right, cy, contentBottom, twoColW, fonts, justify);
+            rowLayouts.push({ type: 'split', left, right });
+            cy = Math.max(left.endY, right.endY) + SECTION_GAP;
         }
-    }
+    });
+
+    // 섹션 카드 흰색 배경 + 박스 그림자
     ctx.fillStyle = '#ffffff';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.09)';
     ctx.shadowBlur = 14;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 3;
-    sectionRects.forEach(({ x, y, w, h }) => ctx.fillRect(x, y, w, h));
+    const fillCard = (x, yy, w, h) => { if (yy < contentBottom) ctx.fillRect(x, yy, w, Math.min(h, contentBottom - yy)); };
+    for (const rl of rowLayouts) {
+        if (rl.type === 'full') fillCard(col1X, rl.y, fullW, rl.h);
+        else {
+            rl.left.positions.forEach(p => fillCard(col1X, p.y, twoColW, p.h));
+            rl.right.positions.forEach(p => fillCard(col2X, p.y, twoColW, p.h));
+        }
+    }
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
 
-    // rows 기반 렌더링
-    let y = contentTop;
-    for (const row of rows) {
-        if (y >= contentBottom) break;
-        if (row.type === 'full') {
-            y = drawSection(ctx, row.section, col1X, y, fullW, themeColor, numColor, fonts, hlColor, labelBoxColor) + 15;
+    // 컨텐츠 렌더링 (배경 패스와 동일 좌표)
+    for (const rl of rowLayouts) {
+        if (rl.type === 'full') {
+            if (rl.y < contentBottom) drawSection(ctx, rl.section, col1X, rl.y, fullW, themeColor, numColor, fonts, hlColor, labelBoxColor);
         } else {
-            const ly = drawColumnSections(ctx, row.left, col1X, y, contentBottom, twoColW, themeColor, numColor, fonts, hlColor, labelBoxColor);
-            const ry = row.right.length
-                ? drawColumnSections(ctx, row.right, col2X, y, contentBottom, twoColW, themeColor, numColor, fonts, hlColor, labelBoxColor)
-                : y;
-            y = Math.max(ly, ry);
+            rl.left.positions.forEach(p => drawSection(ctx, p.sec, col1X, p.y, twoColW, themeColor, numColor, fonts, hlColor, labelBoxColor));
+            rl.right.positions.forEach(p => drawSection(ctx, p.sec, col2X, p.y, twoColW, themeColor, numColor, fonts, hlColor, labelBoxColor));
         }
     }
 
@@ -1168,15 +1387,6 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     return canvas;
 }
 
-function drawColumnSections(ctx, sections, colX, startY, maxY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', labelBoxColor = '#000000') {
-    let y = startY;
-    for (const sec of sections) {
-        if (y >= maxY) break;
-        y = drawSection(ctx, sec, colX, y, colW, themeColor, numColor, fonts, hlColor, labelBoxColor);
-        y += 15;
-    }
-    return y;
-}
 
 function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', labelBoxColor = '#000000') {
     let y = startY;
@@ -1240,22 +1450,24 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
 
 function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35, labelBoxColor = '#000000') {
     const PAD_X = 18, PAD_Y = 12;
-    const NAME_SIZE = bodySize, PRICE_SIZE = 28, NOTE_SIZE = 17;
+    const NAME_SIZE = bodySize, PRICE_SIZE = 28, NOTE_SIZE = Math.round(bodySize * 0.85);  // 비고 (본문 크기 연동)
     const getLineH = (line) => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
 
     // 소제목 행
     if (item.isSublabel) {
-        const SL_H = 44;
+        const SL_H = Math.round(bodySize * 2.2);   // 소제목 박스 높이 (본문 크기 연동)
         ctx.fillStyle = hexToRgba(themeColor, 0.13);
         ctx.fillRect(x, startY, colW, SL_H);
         ctx.letterSpacing = '0px';
-        // 소제목 텍스트 (DSL 지원)
+        // 소제목 텍스트 (DSL 지원) — 섹션 박스 가로 중앙 정렬, 본문 크기 연동
         const chunks = parseStyledText(item.itemName);
-        let cx = x + PAD_X;
+        const chunkFont = chunk => `700 ${Math.max(Math.round(bodySize * 0.9), Math.round(bodySize * 1.1) + chunk.sizeDelta * SIZE_STEP)}px ${chunk.boldLevel > 0 ? fonts.bold : fonts.main}`;
+        let totalW = 0;
+        for (const chunk of chunks) { ctx.font = chunkFont(chunk); totalW += ctx.measureText(chunk.text).width; }
+        let cx = x + Math.max(PAD_X, (colW - totalW) / 2);   // 중앙 시작 (넘치면 좌측 패딩)
         ctx.textBaseline = 'middle';
         for (const chunk of chunks) {
-            const sz = Math.max(18, 22 + chunk.sizeDelta * SIZE_STEP);
-            ctx.font = `700 ${sz}px ${chunk.boldLevel > 0 ? fonts.bold : fonts.main}`;
+            ctx.font = chunkFont(chunk);
             ctx.fillStyle = chunk.isHighlight ? themeColor : hexToRgba(themeColor, 0.85);
             ctx.textAlign = 'left';
             ctx.fillText(chunk.text, cx, startY + SL_H / 2);
@@ -1265,20 +1477,10 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
     }
 
     // 가격 총 너비 측정 → 이름과 겹치면 스택 강제
-    const tiers = buildTiers(item);
-    const priceW = measurePriceTiersWidth(ctx, tiers, numSize, fonts);
-    // 실제 항목명 너비 기준으로 스택 여부 판단 (짧은 이름이면 금액이 넓어도 나란히 배치)
-    const nameLines_check = wrapStyledText(ctx, item.itemName, Math.floor(colW - PAD_X * 2), NAME_SIZE, false, fonts);
-    const nameW_check = nameLines_check.length === 1 ? (nameLines_check[0].totalWidth || 0) : 0;
-    const isStacked = nameLines_check.length > 1 || (tiers.length > 0 && nameW_check + priceW + PAD_X > colW - PAD_X * 2);
-
-    // 스택 모드면 전체 너비로 재측정
-    const nameMaxW = isStacked ? Math.floor(colW - PAD_X * 2) : Math.floor(colW * 0.50);
-    const nameLines = isStacked
-        ? wrapStyledText(ctx, item.itemName, nameMaxW, NAME_SIZE, false, fonts)
-        : nameLines_check;
+    // 레이아웃 판정(나란히 vs 스택) — 측정과 동일 로직(computeItemLayout)
+    const L = computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize);
+    const { tiers, isStacked, nameLines, nameBlockH, tierRows, priceTotalH } = L;
     const lineHeights = nameLines.map(getLineH);
-    const nameBlockH = lineHeights.reduce((s, h) => s + h, 0);
     const firstLineH = lineHeights[0] || NAME_SIZE;
 
     const hasNote = !!item.note;
@@ -1287,15 +1489,9 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
     const PRICE_ROW_GAP = 6;
     const PRICE_GAP = 1;
 
-    // 스택 모드일 때 멀티행 계산
-    const priceAvailW = colW - PAD_X * 2;
-    const tierRows = (isStacked && tiers.length) ? packTierRows(ctx, tiers, priceAvailW, numSize, fonts) : [];
-    const numPriceRows = tierRows.length || 1;
-    const priceTotalH = tiers.length ? (numPriceRows * PRICE_TIER_H + (numPriceRows - 1) * PRICE_ROW_GAP) : PRICE_TIER_H;
-
     let rowH, priceCenterY, nameStartY;
     if (isStacked) {
-        rowH = PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + priceTotalH + PAD_Y + noteH;
+        rowH = PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + priceTotalH + (hasNote ? NOTE_TOP_GAP : PAD_Y) + noteH;
         priceCenterY = startY + PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + PRICE_TIER_H / 2;
         nameStartY = startY + PAD_Y + firstLineH / 2;
     } else {
@@ -1334,7 +1530,7 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
             ctx.fillText(chunk.text, lx, ny);
             lx += chunk.width;
         }
-        if (li + 1 < nameLines.length) ny += lineHeights[li] / 2 + lineHeights[li + 1] / 2;
+        if (li + 1 < nameLines.length) ny += (lineHeights[li] + lineHeights[li + 1]) / 2 * ITEM_LINE_HEIGHT;
     }
 
     // 가격 티어
@@ -1372,7 +1568,7 @@ function buildTiers(item) {
 }
 
 function measureSingleTierWidth(ctx, tier, numSize, fonts) {
-    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = 13;
+    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = Math.round(numSize * 0.37);  // 라벨 칩 (금액 크기 연동)
     let w = 0;
     if (tier.price) {
         const tokens = tokenizePriceText(tier.price);
@@ -1441,7 +1637,7 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
     }
     if (!tiers.length) return;
 
-    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = 13;
+    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = Math.round(numSize * 0.37);  // 라벨 칩 (금액 크기 연동)
     const CHIP_H = Math.round(CHIP_LABEL_SIZE * 2);
     const TIER_GAP = 14;
     let x = rightX;
@@ -1491,7 +1687,7 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
 }
 
 function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fonts, numSize, TIER_H = 35, ROW_GAP = 6, labelBoxColor = '#000000') {
-    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = 13;
+    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = Math.round(numSize * 0.37);  // 라벨 칩 (금액 크기 연동)
     const CHIP_H = Math.round(CHIP_LABEL_SIZE * 2);
     const TIER_GAP = 14;
 
@@ -1622,9 +1818,194 @@ function autoBalancePage(page) {
     });
 }
 
+/* 높이 배열을 좌/우 두 그룹으로 나눠 합 차이를 최소화하는 최적 분할(부분합 DP).
+ * 반환: 각 인덱스가 좌측(true)/우측(false)인지. 동률이면 좌측에 더 많이. */
+function partitionByHeight(heights) {
+    const n = heights.length;
+    const ints = heights.map(h => Math.max(1, Math.round(h)));
+    const total = ints.reduce((a, b) => a + b, 0);
+    // 안전장치: 합이 과도하면(이론상 페이지 초과) 그리디로 대체
+    if (total > 40000) {
+        const order = ints.map((h, i) => ({ h, i })).sort((a, b) => b.h - a.h);
+        let lH = 0, rH = 0; const inLeft = new Array(n).fill(false);
+        for (const o of order) { if (lH <= rH) { inLeft[o.i] = true; lH += o.h; } else { rH += o.h; } }
+        return inLeft;
+    }
+    // 0/1 부분합 DP (역추적 가능하도록 단계별 테이블 보관)
+    const reach = Array.from({ length: n + 1 }, () => new Uint8Array(total + 1));
+    reach[0][0] = 1;
+    for (let i = 1; i <= n; i++) {
+        const hi = ints[i - 1];
+        const prev = reach[i - 1], cur = reach[i];
+        for (let s = 0; s <= total; s++) {
+            if (prev[s]) { cur[s] = 1; if (s + hi <= total) cur[s + hi] = 1; }
+        }
+    }
+    // total/2 이하 중 도달 가능한 최대 합 = 좌측 합 (좌측이 ≥ 우측이 되도록)
+    const half = Math.floor(total / 2);
+    let bestS = 0;
+    for (let s = total - half; s >= 0; s--) { if (reach[n][s]) { bestS = s; break; } }
+    // 역추적: 어떤 섹션이 좌측인지
+    const inLeft = new Array(n).fill(false);
+    let s = bestS;
+    for (let i = n; i >= 1; i--) {
+        const hi = ints[i - 1];
+        if (s - hi >= 0 && reach[i - 1][s - hi]) { inLeft[i - 1] = true; s -= hi; }
+    }
+    return inLeft;
+}
+
+/* split 행 하나를 높이 기준 최적 분할 (구분선이 없어 한쪽에 몰린 경우 사용). */
+function balanceRow(row) {
+    const ctx = getMeasureCtx();
+    const { fonts } = CONFIG;
+    const twoColW = computeTwoColW();
+    const all = [...row.left, ...row.right];
+    if (all.length < 2) { row.left = all; row.right = []; return; }
+    const heights = all.map(s => measureSection(ctx, s, twoColW, fonts) + SECTION_GAP);
+    const inLeft = partitionByHeight(heights);
+    const L = [], R = [];
+    all.forEach((sec, i) => (inLeft[i] ? L : R).push(sec));   // 컬럼 내부 순서 유지
+    if (!L.length) { L.push(R.shift()); }                    // 빈 컬럼 방지
+    else if (!R.length) { R.push(L.pop()); }
+    row.left = L;
+    row.right = R;
+}
+
+/* DOM 노드(섹션 헤더 + 항목들)로부터 측정용 섹션 객체 구성. */
+function sectionFromDom(wrapperNode, itemNodes) {
+    const sec = wrapperNode ? {
+        title: wrapperNode.querySelector('.section-title-input')?.value.trim() || '',
+        titleSize: parseInt(wrapperNode.querySelector('.js-title-size-display')?.textContent) || 24,
+        bodySize: parseInt(wrapperNode.querySelector('.js-body-size-display')?.textContent) || 20,
+        numSize: parseInt(wrapperNode.querySelector('.js-num-size-display')?.textContent) || 35,
+        isFullWidth: wrapperNode.dataset.fullWidth === 'true',
+        items: []
+    } : { title: '', titleSize: 24, bodySize: 20, numSize: 35, isFullWidth: false, items: [] };
+    for (const node of itemNodes) {
+        sec.items.push({
+            itemName: node.querySelector('.item-name')?.value || '',
+            isSublabel: node.querySelector('.item-sublabel')?.checked || false,
+            prices: readPriceSlots(node),
+            note: node.querySelector('.item-note-input')?.value || ''
+        });
+    }
+    return sec;
+}
+
+/* '좌우 균등 맞춤' 실제 정리: 설정 패널의 섹션 DOM과 컬럼 구분선을
+ * 높이 균형 분할 결과대로 좌/우로 실제 이동시킨다.
+ * (전체폭 섹션은 균형 대상에서 제외하고 상단에 모음) */
+/* itemsContainer 를 섹션 블록 단위로 수집. 각 블록 = { wrapper(섹션헤더|null), items[], isFull }.
+ * 구분선은 제외(블록 경계 역할). 섹션 없이 앞선 항목들은 wrapper=null 블록으로. */
+function collectSectionBlocks() {
+    const container = document.getElementById('itemsContainer');
+    const children = Array.from(container.children).filter(n => !n.classList.contains('items-empty-hint'));
+    const blocks = []; let cur = null;
+    for (const node of children) {
+        if (node.classList.contains('column-break-wrapper')) { cur = null; continue; }
+        if (node.classList.contains('section-title-wrapper')) {
+            cur = { wrapper: node, items: [], isFull: node.dataset.fullWidth === 'true' };
+            blocks.push(cur);
+        } else if (node.classList.contains('item-row')) {
+            if (!cur) { cur = { wrapper: null, items: [], isFull: false }; blocks.push(cur); }
+            cur.items.push(node);
+        }
+    }
+    return blocks;
+}
+
+function reorderDomBalanced() {
+    const container = document.getElementById('itemsContainer');
+
+    // 1) 섹션 블록 수집
+    const blocks = collectSectionBlocks();
+    const twoCol = blocks.filter(b => !b.isFull);
+    const full = blocks.filter(b => b.isFull);
+    if (twoCol.length < 2) return false;   // 나눌 게 없음
+
+    // 2) 높이 측정 → 최적 분할
+    const ctx = getMeasureCtx(); const { fonts } = CONFIG; const colW = computeTwoColW();
+    const heights = twoCol.map(b => measureSection(ctx, sectionFromDom(b.wrapper, b.items), colW, fonts) + SECTION_GAP);
+    const inLeft = partitionByHeight(heights);
+    const L = [], R = [];
+    twoCol.forEach((b, i) => (inLeft[i] ? L : R).push(b));   // 컬럼 내부 순서 유지
+    if (!L.length) { L.push(R.shift()); }
+    else if (!R.length) { R.push(L.pop()); }
+
+    // 3) 컬럼 구분선 확보 (없으면 생성, 여러 개면 1개만)
+    const breaks = Array.from(container.querySelectorAll('.column-break-wrapper'));
+    breaks.slice(1).forEach(b => b.remove());
+    let brk = breaks[0];
+    if (!brk) { addColumnBreak(); brk = container.querySelector('.column-break-wrapper'); }
+
+    // 4) DOM 재배치: [전체폭들][좌측 섹션들][구분선][우측 섹션들]
+    const order = [];
+    const pushBlock = b => { if (b.wrapper) order.push(b.wrapper); order.push(...b.items); };
+    full.forEach(pushBlock);
+    L.forEach(pushBlock);
+    order.push(brk);
+    R.forEach(pushBlock);
+    order.forEach(n => container.appendChild(n));   // appendChild 는 기존 노드를 이동시킴
+    return true;
+}
+
+/* 주어진 전체 크기(scale)에서 페이지 내용이 차지하는 세로 높이(최소 간격 기준). */
+function measurePageHeightAtScale(page, scale) {
+    const ctx = getMeasureCtx();
+    const { W, fonts } = CONFIG;
+    const MARGIN = 41, fullW = W - MARGIN * 2, twoColW = computeTwoColW();
+    const scaleSec = sec => ({
+        ...sec,
+        titleSize: Math.round((sec.titleSize || 24) * scale),
+        bodySize: Math.round((sec.bodySize || 20) * scale),
+        numSize: Math.round((sec.numSize || 35) * scale)
+    });
+    const colH = secs => secs.reduce((a, s) => a + measureSection(ctx, scaleSec(s), twoColW, fonts), 0)
+        + Math.max(0, secs.length - 1) * SECTION_GAP;
+    let total = 0;
+    page.rows.forEach((row, i) => {
+        if (i > 0) total += SECTION_GAP;
+        total += row.type === 'full'
+            ? measureSection(ctx, scaleSec(row.section), fullW, fonts)
+            : Math.max(colH(row.left), colH(row.right));
+    });
+    return total;
+}
+
+/* '균등 맞춤' 시 1회성 자동 크기: 더 긴 컬럼이 페이지를 넘치지 않는 최대 전체 크기를
+ * 70~150% 중 5% 단위로 찾아 슬라이더에 적용 (이후 사용자가 자유롭게 재조절 가능). */
+function autoFitTextScale() {
+    const slider = document.getElementById('textScale');
+    if (!slider) return;
+    const { H } = CONFIG, MARGIN = 41;
+    const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '28', 10)) / 100;
+    const headerH = Math.round(H * headerRatio);
+    const available = (H - MARGIN) - (headerH + (headerH > 0 ? HEADER_CONTENT_GAP : MARGIN));
+    const pages = parseDomToPages();
+    if (!pages.length) return;
+    pages.forEach(page => page.rows.forEach(row => { if (row.type === 'split' && row.right.length === 0) balanceRow(row); }));
+    let chosen = 70;
+    for (let s = 150; s >= 70; s -= 5) {
+        if (measurePageHeightAtScale(pages[0], s / 100) <= available) { chosen = s; break; }
+    }
+    slider.value = chosen;
+    const label = document.getElementById('textScaleLabel');
+    if (label) label.value = chosen;
+    updateSliderBg(slider);
+}
+
 function generateImages() {
     const pages = parseDomToPages();
-    pages.forEach(autoBalancePage);
+    if (layoutBalanced) {
+        // 균등 맞춤 ON: DOM(구분선)이 이미 균형 배치를 반영하므로 그대로 신뢰.
+        // 단, 구분선이 없어 한쪽에 몰린 행만 높이 기준으로 분할.
+        pages.forEach(page => page.rows.forEach(row => {
+            if (row.type === 'split' && row.right.length === 0) balanceRow(row);
+        }));
+    } else {
+        pages.forEach(autoBalancePage);
+    }
     const previewContainer = document.getElementById('previewContainer');
     const statusChip = document.getElementById('statusChip');
 
@@ -1663,7 +2044,7 @@ function generateImages() {
             });
         }
         const canvases = pages.map(page =>
-            drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, labelBoxColor)
+            drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, labelBoxColor, layoutBalanced)
         );
 
         generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -2020,6 +2401,27 @@ function toggleAllSections() {
     saveSnapshot();
 }
 
+/* '좌우 균등 맞춤' 토글: 켜면 섹션 DOM·구분선을 높이 균형대로 실제 재배치 + 간격 균등 분배 */
+function toggleBalanceLayout() {
+    layoutBalanced = !layoutBalanced;
+    if (layoutBalanced) {
+        reorderDomBalanced();          // 설정 패널의 섹션·구분선을 좌/우로 실제 정리
+        autoFitTextScale();            // 적절한 전체 텍스트 크기 1회 자동 설정
+        refreshAccordionVisibility();  // 섹션 그룹/접힘 상태 갱신
+        refreshBookmarks();            // 북마크(목차) 패널도 새 좌/우 배치 반영
+        applyColumnTabFilter();        // 좌측/우측 이벤트 탭 필터 갱신
+    }
+    updateBalanceBtn();
+    generateImages();
+    saveSnapshot();
+}
+function updateBalanceBtn() {
+    const btn = document.getElementById('btnBalance');
+    if (!btn) return;
+    btn.classList.toggle('btn-toggle-active', layoutBalanced);
+    btn.textContent = layoutBalanced ? '균등 맞춤 ✓' : '좌우 균등 맞춤';
+}
+
 /* ============================================================
  * 초기화
  * ============================================================ */
@@ -2032,6 +2434,7 @@ window.onload = () => {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(tab === 'design' ? 'tabDesign' : 'tabItems').classList.add('active');
+            if (tab !== 'design') resizeVisibleTextareas();   // 항목 탭 표시 시 입력칸 높이 재계산
         });
     });
 
@@ -2337,22 +2740,24 @@ window.onload = () => {
 
     // 항목 추가 버튼
     document.getElementById('addSectionBtn').addEventListener('click', () => {
-        saveSnapshot(); addSectionTitle();
+        saveSnapshot(); const el = addSectionTitle();
         if (activeColumnTab === 'left') {
             const c = document.getElementById('itemsContainer');
             const cb = c.querySelector('.column-break-wrapper');
             if (cb) c.insertBefore(c.lastElementChild, cb);
         }
         applyColumnTabFilter();
+        scrollToItem(el);
     });
     document.getElementById('addItemBtn').addEventListener('click', () => {
-        saveSnapshot(); addItemRow();
+        saveSnapshot(); const el = addItemRow();
         if (activeColumnTab === 'left') {
             const c = document.getElementById('itemsContainer');
             const cb = c.querySelector('.column-break-wrapper');
             if (cb) c.insertBefore(c.lastElementChild, cb);
         }
         applyColumnTabFilter();
+        scrollToItem(el);
     });
     document.getElementById('addColumnBreakBtn').addEventListener('click', () => {
         saveSnapshot(); addColumnBreak(); applyColumnTabFilter();
@@ -2371,6 +2776,7 @@ window.onload = () => {
         });
     });
     document.getElementById('btnToggleAll').addEventListener('click', toggleAllSections);
+    document.getElementById('btnBalance').addEventListener('click', toggleBalanceLayout);
 
     // itemsContainer 이벤트 위임
     const container = document.getElementById('itemsContainer');
