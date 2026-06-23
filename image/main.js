@@ -1226,16 +1226,32 @@ function computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize) {
     return { tiers, isStacked: true, nameLines: fullLines, nameBlockH: blockH(fullLines), tierRows, priceTotalH };
 }
 
-function measureItemRow(ctx, item, colW, fonts, bodySize = 20, numSize = 35) {
-    if (item.isSublabel) return Math.round(bodySize * 2.2);   // 소제목 박스 높이 (본문 크기 연동)
+/* 항목 행의 높이 + 내부 오프셋(가격 중심 y·이름 시작 y, startY 기준)을 한 곳에서 계산.
+ * measureItemRow(측정)와 drawItemRow(그리기)가 공유 → 두 경로의 높이 공식 분기로 인한
+ * 측정/그리기 불일치(파리티 깨짐)를 원천 차단한다. */
+function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35) {
+    if (item.isSublabel) return { isSublabel: true, rowH: Math.round(bodySize * 2.2), L: null, noteH: 0, priceCenterOff: 0, nameStartOff: 0 };
     const NAME_SIZE = bodySize, PAD_Y = 12, NOTE_SIZE = Math.round(bodySize * 0.85);  // 비고 (본문 크기 연동)
     const noteH = item.note ? (NOTE_SIZE * 1.5 + 2) : 0;
     const L = computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize);
+    const getLineH = line => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
+    const firstLineH = L.nameLines[0] ? getLineH(L.nameLines[0]) : NAME_SIZE;
+    const PRICE_TIER_H = 35, PRICE_GAP = 1;
+    let rowH, priceCenterOff, nameStartOff;
     if (L.isStacked) {
-        const PRICE_GAP = 1;
-        return PAD_Y + Math.ceil(L.nameBlockH) + PRICE_GAP + L.priceTotalH + (noteH ? NOTE_TOP_GAP : PAD_Y) + noteH;
+        rowH = PAD_Y + Math.ceil(L.nameBlockH) + PRICE_GAP + L.priceTotalH + (noteH ? NOTE_TOP_GAP : PAD_Y) + noteH;
+        priceCenterOff = PAD_Y + Math.ceil(L.nameBlockH) + PRICE_GAP + PRICE_TIER_H / 2;
+        nameStartOff = PAD_Y + firstLineH / 2;
+    } else {
+        rowH = Math.max(Math.ceil(L.nameBlockH) + PAD_Y * 2 + noteH, 52);
+        const priceAreaH = rowH - noteH;
+        priceCenterOff = priceAreaH / 2;
+        nameStartOff = priceAreaH / 2 - (L.nameBlockH - firstLineH) / 2;
     }
-    return Math.max(Math.ceil(L.nameBlockH) + PAD_Y * 2 + noteH, 52);
+    return { isSublabel: false, rowH, L, noteH, priceCenterOff, nameStartOff };
+}
+function measureItemRow(ctx, item, colW, fonts, bodySize = 20, numSize = 35) {
+    return itemRowGeometry(ctx, item, colW, fonts, bodySize, numSize).rowH;
 }
 function measureSection(ctx, sec, colW, fonts) {
     let h = sec.title ? (sec.titleSize || 24) + 16 : 0;
@@ -1542,31 +1558,17 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
         return startY + SL_H;
     }
 
-    // 가격 총 너비 측정 → 이름과 겹치면 스택 강제
-    // 레이아웃 판정(나란히 vs 스택) — 측정과 동일 로직(computeItemLayout)
-    const L = computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize);
+    // 레이아웃·높이 판정 — 측정과 동일 로직(itemRowGeometry) 공유로 측정/그리기 파리티 보장
+    const geo = itemRowGeometry(ctx, item, colW, fonts, bodySize, numSize);
+    const { L, rowH, noteH } = geo;
     const { tiers, isStacked, nameLines, nameBlockH, tierRows, priceTotalH } = L;
     const lineHeights = nameLines.map(getLineH);
-    const firstLineH = lineHeights[0] || NAME_SIZE;
-
     const hasNote = !!item.note;
-    const noteH = hasNote ? (NOTE_SIZE * 1.5 + 2) : 0;
     const PRICE_TIER_H = 35;
     const PRICE_ROW_GAP = 6;
     const PRICE_GAP = 1;
-
-    let rowH, priceCenterY, nameStartY;
-    if (isStacked) {
-        rowH = PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + priceTotalH + (hasNote ? NOTE_TOP_GAP : PAD_Y) + noteH;
-        priceCenterY = startY + PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP + PRICE_TIER_H / 2;
-        nameStartY = startY + PAD_Y + firstLineH / 2;
-    } else {
-        const contentH = Math.ceil(nameBlockH) + PAD_Y * 2 + noteH;
-        rowH = Math.max(contentH, 52);
-        const priceAreaH = rowH - noteH;
-        priceCenterY = startY + priceAreaH / 2;
-        nameStartY = startY + priceAreaH / 2 - (nameBlockH - firstLineH) / 2;
-    }
+    const priceCenterY = startY + geo.priceCenterOff;
+    const nameStartY = startY + geo.nameStartOff;
 
     // 배경
     ctx.fillStyle = rowBg;
