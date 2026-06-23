@@ -8,6 +8,7 @@ let activeColumnTab = 'all';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
 let balanceBottomExact = true;   // 균등 맞춤 시 두 컬럼 하단을 bottomY에 정확히 일치(A토글) — 기본 ON
 let autoFitOnePage = true;       // 한 장에 자동 맞춤: 매 렌더마다 한 페이지에 들어가는 최대 크기 자동 적용 — 기본 ON
+let manualTextScale = 100;       // 사용자가 슬라이더로 직접 설정한 전체 텍스트 크기(%) — 자동맞춤 해제 시 이 값으로 복원
 let balanceSnapshot = null;   // 균등 맞춤 켜기 직전 상태(DOM 순서·텍스트 크기) — 끌 때 원상복구용
 let balanceAutoBreak = null;  // 균등 맞춤 켤 때 자동 생성한 컬럼 구분선(끌 때 이 노드만 제거)
 let balanceStale = false;     // 균등 맞춤 켠 뒤 내용이 바뀌어 재정렬이 필요한 상태
@@ -206,6 +207,7 @@ function getSnapshot() {
         balanced: layoutBalanced,
         bottomExact: balanceBottomExact,
         autoFit: autoFitOnePage,
+        manualTextScale: manualTextScale,
         items
     };
 }
@@ -250,6 +252,8 @@ function restoreSnapshot(data) {
         if (cb) cb.checked = balanceBottomExact;
     }
     if (data.autoFit !== undefined) autoFitOnePage = !!data.autoFit;
+    // 사용자 수동 텍스트 크기 복원(없으면 저장된 슬라이더 값으로 폴백)
+    manualTextScale = (data.manualTextScale !== undefined ? parseInt(data.manualTextScale) : parseInt(data.textScale)) || 100;
     syncOnePageUI();
     updateBalanceBtn();
     if (data.topText !== undefined) { const el = document.getElementById('topText'); el.value = data.topText; autoResizeTextarea(el); }
@@ -2720,6 +2724,7 @@ window.onload = () => {
     const textScaleSlider = document.getElementById('textScale');
     textScaleSlider.addEventListener('input', () => {
         document.getElementById('textScaleLabel').value = textScaleSlider.value;
+        manualTextScale = parseInt(textScaleSlider.value) || 100;   // 사용자 수동 값 기억
         updateSliderBg(textScaleSlider);
         debouncedGenerateImages();
         handleInputSnapshot();
@@ -2732,6 +2737,7 @@ window.onload = () => {
         if (isNaN(v)) return;
         v = Math.min(Math.max(v, 70), 150);
         textScaleSlider.value = v;
+        manualTextScale = v;   // 사용자 수동 값 기억
         updateSliderBg(textScaleSlider);
         debouncedGenerateImages();
         handleInputSnapshot();
@@ -2742,6 +2748,7 @@ window.onload = () => {
         v = Math.min(Math.max(v, 70), 150);
         textScaleInput.value = v;
         textScaleSlider.value = v;
+        manualTextScale = v;   // 사용자 수동 값 기억
         updateSliderBg(textScaleSlider);
         saveSnapshot();
     });
@@ -2750,7 +2757,8 @@ window.onload = () => {
     document.getElementById('autoFitOnePage')?.addEventListener('change', e => {
         autoFitOnePage = e.target.checked;
         syncOnePageUI();
-        generateImages();   // 켜짐: 즉시 자동 맞춤 적용 / 꺼짐: 현재 수동 값으로 렌더
+        if (!autoFitOnePage) setTextScaleValue(manualTextScale);   // 해제 시 사용자가 설정했던 크기로 복원
+        generateImages();   // 켜짐: 즉시 자동 맞춤 적용 / 꺼짐: 사용자 수동 값으로 렌더
         saveSnapshot();
     });
     syncOnePageUI();   // 초기 잠금 상태 반영
