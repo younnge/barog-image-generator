@@ -241,6 +241,15 @@ body {
 .design-group {
     display: flex; flex-direction: column; gap: 8px;
 }
+/* 디자인 설정 2컬럼 행 — 좁은 화면에서는 1컬럼으로 자동 전환 */
+.design-2col {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 20px; align-items: start;
+}
+.design-2col > .design-group { min-width: 0; }   /* 그리드 셀 넘침 방지 */
+@media (max-width: 540px) {
+    .design-2col { grid-template-columns: 1fr; }
+}
 .design-group-label {
     font-size: 11px; font-weight: 600;
     color: var(--text-muted);

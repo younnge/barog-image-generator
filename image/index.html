@@ -62,64 +62,70 @@
                     </div>
                 </div>
 
-                <div class="design-group">
-                    <div class="design-group-label">테마 색상</div>
-                    <div class="color-input-row">
-                        <div class="swatch-picker">
-                            <div class="color-swatch" id="themeSwatch" style="background:#000000;"></div>
-                            <input type="color" id="themeColor" value="#000000">
+                <div class="design-2col">
+                    <div class="design-group">
+                        <div class="design-group-label">테마 색상</div>
+                        <div class="color-input-row">
+                            <div class="swatch-picker">
+                                <div class="color-swatch" id="themeSwatch" style="background:#000000;"></div>
+                                <input type="color" id="themeColor" value="#000000">
+                            </div>
+                            <input type="text" id="themeHex" class="btn-input hex-input" value="#000000" maxlength="7">
                         </div>
-                        <input type="text" id="themeHex" class="btn-input hex-input" value="#000000" maxlength="7">
+                        <div id="colorPresets" class="color-presets-wrap"></div>
                     </div>
-                    <div id="colorPresets" class="color-presets-wrap"></div>
+
+                    <div class="design-group">
+                        <div class="design-group-label">숫자 색상</div>
+                        <div class="color-input-row">
+                            <div class="swatch-picker">
+                                <div class="color-swatch" id="numColorSwatch" style="background:#000000;"></div>
+                                <input type="color" id="numColorPicker" value="#000000">
+                            </div>
+                            <input type="text" id="numColorHex" class="btn-input hex-input" value="#000000" maxlength="7">
+                        </div>
+                        <div id="numColorPresets" class="color-presets-wrap"></div>
+                    </div>
                 </div>
 
-                <div class="design-group">
-                    <div class="design-group-label">숫자 색상</div>
-                    <div class="color-input-row">
-                        <div class="swatch-picker">
-                            <div class="color-swatch" id="numColorSwatch" style="background:#000000;"></div>
-                            <input type="color" id="numColorPicker" value="#000000">
+                <div class="design-2col">
+                    <div class="design-group">
+                        <div class="design-group-label">강조 색상 <span class="design-group-hint">서식 &lt;강조&gt; 적용 색</span></div>
+                        <div class="color-input-row">
+                            <div class="swatch-picker">
+                                <div class="color-swatch" id="hlColorSwatch" style="background:#ffeb3b;"></div>
+                                <input type="color" id="hlColorPicker" value="#ffeb3b">
+                            </div>
+                            <input type="text" id="hlColorHex" class="btn-input hex-input" value="#FFEB3B" maxlength="7">
                         </div>
-                        <input type="text" id="numColorHex" class="btn-input hex-input" value="#000000" maxlength="7">
+                        <div id="hlColorPresets" class="color-presets-wrap"></div>
                     </div>
-                    <div id="numColorPresets" class="color-presets-wrap"></div>
+
+                    <div class="design-group">
+                        <div class="design-group-label">단위박스 색상 <span class="design-group-hint">가격 단위 칩 배경색</span></div>
+                        <div class="color-input-row">
+                            <div class="swatch-picker">
+                                <div class="color-swatch" id="labelBoxColorSwatch" style="background:#000000;"></div>
+                                <input type="color" id="labelBoxColorPicker" value="#000000">
+                            </div>
+                            <input type="text" id="labelBoxColorHex" class="btn-input hex-input" value="#000000" maxlength="7">
+                        </div>
+                        <div id="labelBoxColorPresets" class="color-presets-wrap"></div>
+                    </div>
                 </div>
 
-                <div class="design-group">
-                    <div class="design-group-label">텍스트 색상 <span class="design-group-hint">상단·기간 공통</span></div>
-                    <div class="color-input-row">
-                        <div class="swatch-picker">
-                            <div class="color-swatch" id="textColorSwatch" style="background:#000000;"></div>
-                            <input type="color" id="textColorPicker" value="#000000">
+                <div class="design-2col">
+                    <div class="design-group">
+                        <div class="design-group-label">상단 텍스트 색상 <span class="design-group-hint">상단·기간 공통</span></div>
+                        <div class="color-input-row">
+                            <div class="swatch-picker">
+                                <div class="color-swatch" id="textColorSwatch" style="background:#000000;"></div>
+                                <input type="color" id="textColorPicker" value="#000000">
+                            </div>
+                            <input type="text" id="textColorHex" class="btn-input hex-input" value="#000000" maxlength="7">
                         </div>
-                        <input type="text" id="textColorHex" class="btn-input hex-input" value="#000000" maxlength="7">
+                        <div id="textColorPresets" class="color-presets-wrap"></div>
                     </div>
-                    <div id="textColorPresets" class="color-presets-wrap"></div>
-                </div>
-
-                <div class="design-group">
-                    <div class="design-group-label">강조 색상 <span class="design-group-hint">서식 &lt;강조&gt; 적용 색</span></div>
-                    <div class="color-input-row">
-                        <div class="swatch-picker">
-                            <div class="color-swatch" id="hlColorSwatch" style="background:#ffeb3b;"></div>
-                            <input type="color" id="hlColorPicker" value="#ffeb3b">
-                        </div>
-                        <input type="text" id="hlColorHex" class="btn-input hex-input" value="#FFEB3B" maxlength="7">
-                    </div>
-                    <div id="hlColorPresets" class="color-presets-wrap"></div>
-                </div>
-
-                <div class="design-group">
-                    <div class="design-group-label">단위박스 색상 <span class="design-group-hint">가격 단위 칩 배경색</span></div>
-                    <div class="color-input-row">
-                        <div class="swatch-picker">
-                            <div class="color-swatch" id="labelBoxColorSwatch" style="background:#000000;"></div>
-                            <input type="color" id="labelBoxColorPicker" value="#000000">
-                        </div>
-                        <input type="text" id="labelBoxColorHex" class="btn-input hex-input" value="#000000" maxlength="7">
-                    </div>
-                    <div id="labelBoxColorPresets" class="color-presets-wrap"></div>
                 </div>
 
                 <div class="design-group">
@@ -134,44 +140,48 @@
                     </div>
                 </div>
 
-                <div class="design-group">
-                    <div class="design-group-label">이벤트 기간</div>
-                    <div class="item-name-wrapper">
-                        <input type="text" id="periodText" class="btn-input" placeholder="예) 2026.05.01 - 2026.05.31" value="">
-                        <div class="format-toolbar">
-                            <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
-                            <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
-                            <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
+                <div class="design-2col">
+                    <div class="design-group">
+                        <div class="design-group-label">이벤트 기간</div>
+                        <div class="item-name-wrapper">
+                            <input type="text" id="periodText" class="btn-input" placeholder="예) 2026.05.01 - 2026.05.31" value="">
+                            <div class="format-toolbar">
+                                <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
+                                <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
+                                <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="design-group">
+                        <div class="design-group-label">기간 우측 텍스트</div>
+                        <div class="item-name-wrapper">
+                            <input type="text" id="periodNote" class="btn-input" placeholder="예) 부가세 별도" value="">
+                            <div class="format-toolbar">
+                                <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
+                                <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
+                                <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="design-group">
-                    <div class="design-group-label">기간 우측 텍스트</div>
-                    <div class="item-name-wrapper">
-                        <input type="text" id="periodNote" class="btn-input" placeholder="예) 부가세 별도" value="">
-                        <div class="format-toolbar">
-                            <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
-                            <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
-                            <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
+                <div class="design-2col">
+                    <div class="design-group">
+                        <div class="label-with-tip">
+                            <span class="label-text">헤더 높이</span>
+                            <span class="label-tip-wrap"><input type="number" id="headerHeightLabel" class="label-tip-input" min="0" max="55" step="1" value="5"><span class="label-tip-unit">%</span></span>
                         </div>
+                        <input type="range" id="headerHeight" min="0" max="55" value="5" step="1" class="slider-input">
                     </div>
-                </div>
 
-                <div class="design-group">
-                    <div class="label-with-tip">
-                        <span class="label-text">헤더 높이</span>
-                        <span class="label-tip-wrap"><input type="number" id="headerHeightLabel" class="label-tip-input" min="0" max="55" step="1" value="5"><span class="label-tip-unit">%</span></span>
+                    <div class="design-group">
+                        <div class="label-with-tip">
+                            <span class="label-text">전체 텍스트 크기</span>
+                            <span class="label-tip-wrap"><input type="number" id="textScaleLabel" class="label-tip-input" min="70" max="150" step="5" value="100"><span class="label-tip-unit">%</span></span>
+                        </div>
+                        <input type="range" id="textScale" min="70" max="150" value="100" step="5" class="slider-input">
                     </div>
-                    <input type="range" id="headerHeight" min="0" max="55" value="5" step="1" class="slider-input">
-                </div>
-
-                <div class="design-group">
-                    <div class="label-with-tip">
-                        <span class="label-text">전체 텍스트 크기</span>
-                        <span class="label-tip-wrap"><input type="number" id="textScaleLabel" class="label-tip-input" min="70" max="150" step="5" value="100"><span class="label-tip-unit">%</span></span>
-                    </div>
-                    <input type="range" id="textScale" min="70" max="150" value="100" step="5" class="slider-input">
                 </div>
 
             </div>
@@ -259,6 +269,6 @@
         <input type="file" id="loadFileInput" accept=".json" style="display:none">
     </div>
 
-    <script src="main.js?v=20260623c"></script>
+    <script src="main.js?v=20260623e"></script>
 </body>
 </html>
