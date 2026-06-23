@@ -2991,6 +2991,14 @@ window.onload = () => {
     document.getElementById('btnToggleAll').addEventListener('click', toggleAllSections);
     document.getElementById('btnBalance').addEventListener('click', toggleBalanceLayout);
     document.getElementById('btnAutoAll')?.addEventListener('click', autoLayoutAll);
+    // 고급 설정(수동 조정) 접기/펼치기
+    const advToggle = document.getElementById('advToggle');
+    const advPanel = document.getElementById('advPanel');
+    advToggle?.addEventListener('click', () => {
+        const open = advPanel.hidden;
+        advPanel.hidden = !open;
+        advToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
     document.getElementById('balanceBottomExact')?.addEventListener('change', e => {
         balanceBottomExact = e.target.checked;
         // 켜진 균등 맞춤에 즉시 반영: 잔여를 다시 계산해 최적 크기로 맞춤

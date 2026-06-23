@@ -425,7 +425,17 @@ body {
 /* 원클릭 '한 번에 자동 맞춤' — 강조(채움) 버튼 */
 .btn-auto-all { background: var(--primary); color: #fff; font-weight: 700; font-size: 13.5px; margin-top: 10px; }
 .btn-auto-all:hover { background: var(--primary); color: #fff; filter: brightness(.95); }
-.auto-all-hint { font-size: 10.5px; color: var(--text-tertiary); text-align: center; margin: 8px 0 2px; }
+/* 고급 설정 접기/펼치기 */
+.adv-toggle {
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    width: 100%; margin-top: 10px; padding: 7px; border: none; background: none;
+    font-size: 11.5px; color: var(--text-muted); cursor: pointer;
+}
+.adv-toggle:hover { color: var(--text-main); }
+.adv-chevron { transition: transform .2s; }
+.adv-toggle[aria-expanded="true"] .adv-chevron { transform: rotate(180deg); }
+.adv-panel { display: flex; flex-direction: column; }
+.adv-panel[hidden] { display: none; }
 /* ── ON/OFF 토글 스위치 행 (라벨 + 설명) ── */
 .toggle-row {
     display: flex; align-items: center; gap: 11px; margin-top: 6px;
