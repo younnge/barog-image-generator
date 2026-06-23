@@ -17,6 +17,7 @@ const MAX_UNDO = 100;
 const SS_KEY = 'a4EventData';
 const SS_BG_KEY = 'a4BgImage';
 const SCHEMA_VERSION = 1;   // 저장 스키마 버전 — 향후 구조 변경 시 마이그레이션 분기 기준
+const MAX_RESTORE_ITEMS = 2000;   // 백업 복원 시 항목 수 상한(손상/악성 파일 DoS 방지)
 
 /* ============================================================
  * 의료법 위반 사전 (기존 앱과 동일)
@@ -277,7 +278,13 @@ function restoreSnapshot(data) {
     // innerHTML 교체 전 남아있는 위반 툴팁을 body에서 제거
     container.querySelectorAll('.btn-input').forEach(el => { el._violTooltip?.remove(); el._violTooltip = null; });
     container.innerHTML = '';
-    (data.items || []).forEach(item => {
+    let items = data.items || [];
+    // 과도한 항목 수 가드: 비정상/손상 백업이 수만 개 노드를 동기 생성해 탭이 멈추는 것을 방지
+    if (items.length > MAX_RESTORE_ITEMS) {
+        items = items.slice(0, MAX_RESTORE_ITEMS);
+        showColorToast(`항목이 너무 많아 앞 ${MAX_RESTORE_ITEMS}개만 불러왔습니다.`);
+    }
+    items.forEach(item => {
         if (item.type === 'item') addItemRow(item);
         else if (item.type === 'sectionTitle') addSectionTitle(item.value, item.collapsed, item.id, item.titleSize || 24, item.bodySize || 20, item.numSize || 35, !!item.isFullWidth);
         else if (item.type === 'columnBreak') addColumnBreak(item.id);
@@ -372,6 +379,7 @@ function restoreFromSessionStorage() {
         if (bgData) {
             const img = new Image();
             img.onload = () => { cachedBgImg = img; showBgThumb(bgData); generateImages(); };
+            img.onerror = () => { cachedBgImg = null; hideBgThumb(); generateImages(); };   // 손상된 저장 배경은 조용히 제거
             img.src = bgData;
         }
         return true;
@@ -2504,6 +2512,7 @@ function loadProject(event) {
             if (data.bgImage) {
                 const img = new Image();
                 img.onload = () => { cachedBgImg = img; showBgThumb(data.bgImage); generateImages(); markSaved(); };
+                img.onerror = () => { showColorToast('배경 이미지를 복원하지 못했습니다. 데이터 본문은 정상 적용됐습니다.'); generateImages(); markSaved(); };
                 img.src = data.bgImage;
                 showColorToast('불러오기 완료. 배경 이미지도 함께 복원되었습니다.');
             } else {
@@ -2513,6 +2522,7 @@ function loadProject(event) {
             }
         } catch(err) { showColorToast('잘못된 백업 파일입니다.'); }
     };
+    reader.onerror = () => showColorToast('파일을 읽지 못했습니다. 다시 시도해 주세요.');
     reader.readAsText(file);
     event.target.value = '';
 }
@@ -2939,8 +2949,10 @@ window.onload = () => {
         reader.onload = ev => {
             const img = new Image();
             img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result); debouncedGenerateImages(); };
+            img.onerror = () => showColorToast('이미지를 불러오지 못했습니다. 다른 파일을 선택해 주세요.');
             img.src = ev.target.result;
         };
+        reader.onerror = () => showColorToast('파일을 읽지 못했습니다. 다시 시도해 주세요.');
         reader.readAsDataURL(file);
         document.getElementById('fileLabelMain').textContent = file.name;
         document.getElementById('dropZone').classList.add('file-attached');
@@ -2957,8 +2969,10 @@ window.onload = () => {
         reader.onload = ev => {
             const img = new Image();
             img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result); debouncedGenerateImages(); };
+            img.onerror = () => showColorToast('이미지를 불러오지 못했습니다. 다른 파일을 선택해 주세요.');
             img.src = ev.target.result;
         };
+        reader.onerror = () => showColorToast('파일을 읽지 못했습니다. 다시 시도해 주세요.');
         reader.readAsDataURL(file);
         document.getElementById('fileLabelMain').textContent = file.name;
         document.getElementById('dropZone').classList.add('file-attached');
