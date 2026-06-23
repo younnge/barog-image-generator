@@ -14,6 +14,7 @@ let redoHistory = [];
 const MAX_UNDO = 100;
 const SS_KEY = 'a4EventData';
 const SS_BG_KEY = 'a4BgImage';
+const SCHEMA_VERSION = 1;   // 저장 스키마 버전 — 향후 구조 변경 시 마이그레이션 분기 기준
 
 /* ============================================================
  * 의료법 위반 사전 (기존 앱과 동일)
@@ -188,6 +189,7 @@ function getSnapshot() {
         }
     });
     return {
+        version: SCHEMA_VERSION,
         topText: document.getElementById('topText')?.value || '',
         periodText: document.getElementById('periodText')?.value || '',
         periodNote: document.getElementById('periodNote')?.value || '',
@@ -230,7 +232,10 @@ function updateRemoteState() {
 
 function restoreSnapshot(data) {
     if (typeof data === 'string') data = JSON.parse(data);
-    if (!data) return;
+    // 형태 검증: 객체이고 items가 배열이어야 부분 적용 후 실패를 방지
+    if (!data || typeof data !== 'object' || (data.items !== undefined && !Array.isArray(data.items))) {
+        throw new Error('잘못된 데이터 형식');
+    }
     layoutBalanced = !!data.balanced;
     // 복원은 새 기준선 — 이전 DOM을 가리키던 균등 맞춤 상태는 모두 초기화
     balanceSnapshot = null; balanceAutoBreak = null; balanceStale = false;
@@ -320,7 +325,9 @@ function applyColumnTabFilter() {
     });
 
     document.querySelectorAll('.col-tab').forEach(btn => {
-        btn.classList.toggle('col-tab-active', btn.dataset.col === activeColumnTab);
+        const on = btn.dataset.col === activeColumnTab;
+        btn.classList.toggle('col-tab-active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
     });
 
     const colBtn = document.getElementById('addColumnBreakBtn');
@@ -353,8 +360,8 @@ function restoreFromSessionStorage() {
         const bgData = sessionStorage.getItem(SS_BG_KEY);
         if (bgData) {
             const img = new Image();
-            img.src = bgData;
             img.onload = () => { cachedBgImg = img; showBgThumb(bgData); generateImages(); };
+            img.src = bgData;
         }
         return true;
     } catch(e) { return false; }
@@ -532,6 +539,7 @@ function addItemRow(itemData = {}) {
         checkbox.checked = !checkbox.checked;
         this.classList.toggle('btn-action-active', checkbox.checked);
         row.querySelector('.item-prices-row').classList.toggle('hidden', checkbox.checked);
+        markBalanceStale();
         debouncedGenerateImages();
         handleInputSnapshot();
     });
@@ -945,6 +953,7 @@ function onDragMouseUp() {
     document.removeEventListener('mousemove', onDragMouseMove);
     document.removeEventListener('mouseup', onDragMouseUp);
     refreshAccordionVisibility();
+    markBalanceStale();
     saveSnapshot();
     debouncedGenerateImages();
 }
@@ -968,6 +977,7 @@ function onDragTouchEnd() {
     document.removeEventListener('touchmove', onDragTouchMove);
     document.removeEventListener('touchend', onDragTouchEnd);
     refreshAccordionVisibility();
+    markBalanceStale();
     saveSnapshot();
     debouncedGenerateImages();
 }
@@ -1012,6 +1022,13 @@ function closeTokenLiteral(t) {
     return (d > 0 ? '+'.repeat(d) : d < 0 ? '-'.repeat(-d) : '') + '>';
 }
 
+/* 짝 없는 여는 토큰의 원래 문자 복원('<', '<+', '<-', '{' 등). */
+function openTokenLiteral(t) {
+    if (t.type === 'OPEN_BRACE') return '{';
+    const d = t.sizeDelta || 0;
+    return '<' + (d > 0 ? '+'.repeat(d) : d < 0 ? '-'.repeat(-d) : '');
+}
+
 function parse(tokens) {
     let pos = 0;
     // top=true(최상위)에서는 짝 없는 닫기 토큰(>,})을 리터럴 텍스트로 흡수해 뒤 텍스트 유실을 막는다.
@@ -1023,13 +1040,21 @@ function parse(tokens) {
             if (t.type === 'TEXT') { nodes.push({ type: 'TEXT', value: t.value }); pos++; }
             else if (t.type === 'OPEN_ANGLE') {
                 pos++; const children = parseBlock(false);
-                let cd = 0;
-                if (pos < tokens.length && tokens[pos].type === 'CLOSE_ANGLE') { cd = tokens[pos].sizeDelta; pos++; }
-                nodes.push({ type: 'ANGLE', sizeDelta: t.sizeDelta || cd, children });
+                if (pos < tokens.length && tokens[pos].type === 'CLOSE_ANGLE') {
+                    const cd = tokens[pos].sizeDelta; pos++;
+                    nodes.push({ type: 'ANGLE', sizeDelta: t.sizeDelta || cd, children });
+                } else {
+                    // 짝 없는 여는 토큰 → '<'를 리터럴로 복원하고 자식은 스타일 없이 펼침
+                    nodes.push({ type: 'TEXT', value: openTokenLiteral(t) }, ...children);
+                }
             } else if (t.type === 'OPEN_BRACE') {
                 pos++; const children = parseBlock(false);
-                if (pos < tokens.length && tokens[pos].type === 'CLOSE_BRACE') pos++;
-                nodes.push({ type: 'BRACE', children });
+                if (pos < tokens.length && tokens[pos].type === 'CLOSE_BRACE') {
+                    pos++;
+                    nodes.push({ type: 'BRACE', children });
+                } else {
+                    nodes.push({ type: 'TEXT', value: openTokenLiteral(t) }, ...children);
+                }
             } else if (top) {
                 // 짝 없는 닫기 토큰 → 리터럴 텍스트로 처리하고 계속 파싱
                 nodes.push({ type: 'TEXT', value: closeTokenLiteral(t) }); pos++;
@@ -2415,8 +2440,8 @@ function loadProject(event) {
             restoreSnapshot(data);
             if (data.bgImage) {
                 const img = new Image();
-                img.src = data.bgImage;
                 img.onload = () => { cachedBgImg = img; showBgThumb(data.bgImage); generateImages(); markSaved(); };
+                img.src = data.bgImage;
                 showColorToast('불러오기 완료. 배경 이미지도 함께 복원되었습니다.');
             } else {
                 showColorToast('불러오기 완료. 배경 이미지는 별도로 다시 선택해 주세요.');
@@ -2459,7 +2484,7 @@ let isAllCollapsed = false;
 function toggleAllSections() {
     isAllCollapsed = !isAllCollapsed;
     const btn = document.getElementById('btnToggleAll');
-    if (btn) btn.textContent = isAllCollapsed ? '모두 펼치기' : '모두 접기';
+    if (btn) { btn.textContent = isAllCollapsed ? '모두 펼치기' : '모두 접기'; btn.setAttribute('aria-pressed', isAllCollapsed ? 'true' : 'false'); }
     document.querySelectorAll('#itemsContainer .section-title-wrapper').forEach(node => {
         node.classList.toggle('collapsed', isAllCollapsed);
     });
@@ -2557,9 +2582,10 @@ window.onload = () => {
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const tab = btn.dataset.tab;
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
+            btn.setAttribute('aria-selected', 'true');
             document.getElementById(tab === 'design' ? 'tabDesign' : 'tabItems').classList.add('active');
             if (tab !== 'design') resizeVisibleTextareas();   // 항목 탭 표시 시 입력칸 높이 재계산
         });
@@ -2840,8 +2866,8 @@ window.onload = () => {
         const reader = new FileReader();
         reader.onload = ev => {
             const img = new Image();
-            img.src = ev.target.result;
             img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result); debouncedGenerateImages(); };
+            img.src = ev.target.result;
         };
         reader.readAsDataURL(file);
         document.getElementById('fileLabelMain').textContent = file.name;
@@ -2857,8 +2883,9 @@ window.onload = () => {
         if (file.size > 20 * 1024 * 1024) { showColorToast('이미지 파일 크기는 20MB 이하로 선택해 주세요.'); return; }
         const reader = new FileReader();
         reader.onload = ev => {
-            const img = new Image(); img.src = ev.target.result;
+            const img = new Image();
             img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result); debouncedGenerateImages(); };
+            img.src = ev.target.result;
         };
         reader.readAsDataURL(file);
         document.getElementById('fileLabelMain').textContent = file.name;
@@ -2943,7 +2970,7 @@ window.onload = () => {
         if (e.target.matches('.btn-input') && e.target._before !== e.target.value) saveSnapshot();
     });
     container.addEventListener('paste', e => {
-        if (e.target.matches('.btn-input')) setTimeout(() => { updateViolationUI(e.target); saveSnapshot(); }, 0);
+        if (e.target.matches('.btn-input')) setTimeout(() => { updateViolationUI(e.target); markBalanceStale(); saveSnapshot(); }, 0);
     });
     container.addEventListener('click', e => {
         // 내용·구조를 바꾸는 조작이면 균등 맞춤 재정렬 필요 표시
@@ -3077,6 +3104,10 @@ window.onload = () => {
         const isTitlePlus  = e.target.closest('.js-title-size-plus');
         const isBodyMinus  = e.target.closest('.js-body-size-minus');
         const isBodyPlus   = e.target.closest('.js-body-size-plus');
+        // 섹션 크기 변경은 measureSection 높이를 바꿔 균형에 영향 → 재정렬 필요 표시
+        if (e.target.closest('.js-title-size-minus, .js-title-size-plus, .js-body-size-minus, .js-body-size-plus, .js-num-size-minus, .js-num-size-plus')) {
+            markBalanceStale();
+        }
         if (isTitleMinus || isTitlePlus) {
             const display = e.target.closest('.section-title-wrapper').querySelector('.js-title-size-display');
             let val = parseInt(display.textContent) || 24;

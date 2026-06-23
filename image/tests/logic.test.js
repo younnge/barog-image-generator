@@ -52,6 +52,28 @@ test('크기 확대 <+..+> 내용 보존 + sizeDelta>0', () => {
 test('짝 없는 +> 는 원문자(+>)로 복원', () => {
     assert.strictEqual(textOf(sandbox.parseStyledText('값+>끝')), '값+>끝');
 });
+test('짝 없는 여는 < 뒤 텍스트·기호 유실 방지 + 강조 누출 없음 (회귀)', () => {
+    const c = sandbox.parseStyledText('수술 전<후 비교');
+    assert.strictEqual(textOf(c), '수술 전<후 비교');
+    assert.ok(!c.some(ch => ch.isHighlight));   // 짝 없는 <가 뒤를 강조하면 안 됨
+});
+test('짝 없는 여는 { 는 원문자({)로 복원', () => {
+    const c = sandbox.parseStyledText('효과{굵게');
+    assert.strictEqual(textOf(c), '효과{굵게');
+    assert.ok(!c.some(ch => ch.boldLevel >= 1));
+});
+test('짝 없는 여는 <+ 는 원문자(<+)로 복원 + 확대 누출 없음', () => {
+    const c = sandbox.parseStyledText('5<+10');
+    assert.strictEqual(textOf(c), '5<+10');
+    assert.ok(!c.some(ch => ch.sizeDelta > 0));
+});
+test('다중 stray < 모두 리터럴 보존', () => {
+    assert.strictEqual(textOf(sandbox.parseStyledText('5 < 10 < 20')), '5 < 10 < 20');
+});
+test('여는<가 정상 중첩 토큰은 깨지 않음', () => {
+    const c = sandbox.parseStyledText('A<강조>B');   // 닫힘 정상
+    assert.ok(c.some(ch => ch.isHighlight && ch.text === '강조'));
+});
 
 console.log('가격 텍스트 토큰화');
 test('숫자/단위 분리', () => {

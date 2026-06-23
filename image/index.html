@@ -35,20 +35,20 @@
             <!-- 카드 헤드: 타이틀 + 탭 -->
             <div class="input-card-head">
                 <h1>원내이미지 생성기</h1>
-                <div class="tab-bar">
-                    <button class="tab-btn active" data-tab="design">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                <div class="tab-bar" role="tablist" aria-label="설정 탭">
+                    <button class="tab-btn active" data-tab="design" role="tab" id="tab-design" aria-selected="true" aria-controls="tabDesign">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
                         디자인 설정
                     </button>
-                    <button class="tab-btn" data-tab="items">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    <button class="tab-btn" data-tab="items" role="tab" id="tab-items" aria-selected="false" aria-controls="tabItems">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                         항목 구성
                     </button>
                 </div>
             </div>
 
             <!-- ===== 디자인 설정 탭 ===== -->
-            <div class="tab-content active" id="tabDesign">
+            <div class="tab-content active" id="tabDesign" role="tabpanel" aria-labelledby="tab-design">
 
                 <div class="design-group">
                     <div class="design-group-label">배경 이미지</div>
@@ -177,21 +177,21 @@
             </div>
 
             <!-- ===== 항목 구성 탭 ===== -->
-            <div class="tab-content" id="tabItems">
+            <div class="tab-content" id="tabItems" role="tabpanel" aria-labelledby="tab-items">
                 <div class="items-header">
                     <div class="section-label-row">
                         <span class="items-tab-title">항목 구성</span>
                         <div style="display:flex;gap:6px;align-items:center;">
                             <span class="colsplit-hint" id="colSplitHint"></span>
                             <button class="btn-toggle-all" id="btnBalance" aria-pressed="false" title="좌우 컬럼 높이를 자동으로 균등 배분하고 남는 간격을 균등 분배합니다">좌우 균등 맞춤</button>
-                            <button class="btn-toggle-all" id="btnToggleAll">모두 접기</button>
+                            <button class="btn-toggle-all" id="btnToggleAll" aria-pressed="false">모두 접기</button>
                         </div>
                     </div>
                 </div>
-                <div class="column-tab-bar" id="columnTabBar">
-                    <button class="col-tab col-tab-active" data-col="all">전체</button>
-                    <button class="col-tab" data-col="left">좌측 이벤트</button>
-                    <button class="col-tab" data-col="right">우측 이벤트</button>
+                <div class="column-tab-bar" id="columnTabBar" role="tablist" aria-label="컬럼 필터">
+                    <button class="col-tab col-tab-active" data-col="all" role="tab" aria-selected="true">전체</button>
+                    <button class="col-tab" data-col="left" role="tab" aria-selected="false">좌측 이벤트</button>
+                    <button class="col-tab" data-col="right" role="tab" aria-selected="false">우측 이벤트</button>
                 </div>
                 <div class="items-scroll">
                     <div id="itemsContainer"></div>
@@ -259,6 +259,6 @@
         <input type="file" id="loadFileInput" accept=".json" style="display:none">
     </div>
 
-    <script src="main.js?v=20260623b"></script>
+    <script src="main.js?v=20260623c"></script>
 </body>
 </html>
