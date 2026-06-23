@@ -7,6 +7,7 @@ let isBackedUp = true;
 let activeColumnTab = 'all';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
 let balanceBottomExact = true;   // 균등 맞춤 시 두 컬럼 하단을 bottomY에 정확히 일치(A토글) — 기본 ON
+let autoFitOnePage = true;       // 한 장에 자동 맞춤: 매 렌더마다 한 페이지에 들어가는 최대 크기 자동 적용 — 기본 ON
 let balanceSnapshot = null;   // 균등 맞춤 켜기 직전 상태(DOM 순서·텍스트 크기) — 끌 때 원상복구용
 let balanceAutoBreak = null;  // 균등 맞춤 켤 때 자동 생성한 컬럼 구분선(끌 때 이 노드만 제거)
 let balanceStale = false;     // 균등 맞춤 켠 뒤 내용이 바뀌어 재정렬이 필요한 상태
@@ -203,6 +204,7 @@ function getSnapshot() {
         textScale: document.getElementById('textScale')?.value || '100',
         balanced: layoutBalanced,
         bottomExact: balanceBottomExact,
+        autoFit: autoFitOnePage,
         items
     };
 }
@@ -246,6 +248,8 @@ function restoreSnapshot(data) {
         const cb = document.getElementById('balanceBottomExact');
         if (cb) cb.checked = balanceBottomExact;
     }
+    if (data.autoFit !== undefined) autoFitOnePage = !!data.autoFit;
+    syncOnePageUI();
     updateBalanceBtn();
     if (data.topText !== undefined) { const el = document.getElementById('topText'); el.value = data.topText; autoResizeTextarea(el); }
     if (data.periodText !== undefined) document.getElementById('periodText').value = data.periodText;
@@ -2068,6 +2072,43 @@ function autoFitTextScale() {
     updateSliderBg(slider);
 }
 
+/* 슬라이더 값 설정(라벨·배경 동기화). */
+function setTextScaleValue(v) {
+    const slider = document.getElementById('textScale');
+    if (slider) slider.value = v;
+    const label = document.getElementById('textScaleLabel');
+    if (label) label.value = v;
+    if (slider) updateSliderBg(slider);
+}
+
+/* '한 장에 자동 맞춤' UI 동기화: 켜지면 수동 슬라이더를 잠가(자동 제어) 혼동을 막는다. */
+function syncOnePageUI() {
+    const slider = document.getElementById('textScale');
+    const label = document.getElementById('textScaleLabel');
+    const cb = document.getElementById('autoFitOnePage');
+    if (cb) cb.checked = autoFitOnePage;
+    if (slider) slider.disabled = autoFitOnePage;
+    if (label) label.disabled = autoFitOnePage;
+    document.getElementById('textScaleGroup')?.classList.toggle('auto-locked', autoFitOnePage);
+}
+
+/* 주어진(이미 균형 처리된) pages 를 한 장에 담는 최대 크기(70~150%)를 찾아 슬라이더에 반영.
+ * 다 담기면 true, 70%로도 넘치면 false 반환(호출측에서 '항목 줄이기' 경고). */
+function applyOnePageFit(pages) {
+    if (!pages.length) return true;
+    const available = availableContentHeight();
+    // 높이는 크기에 단조 증가 → 이분탐색으로 들어가는 최대 크기 탐색(매 렌더 호출이라 81회→~7회)
+    let lo = 70, hi = 150, best = null;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (measurePageHeightAtScale(pages[0], mid / 100) <= available) { best = mid; lo = mid + 1; }
+        else hi = mid - 1;
+    }
+    const fits = best !== null;
+    setTextScaleValue(fits ? best : 70);
+    return fits;
+}
+
 function generateImages() {
     const pages = parseDomToPages();
     if (layoutBalanced) {
@@ -2090,6 +2131,10 @@ function generateImages() {
     }
 
     if (statusChip) { statusChip.textContent = '생성 중…'; statusChip.className = 'status-chip generating'; }
+
+    // 한 장에 자동 맞춤: 균형 처리까지 끝난 pages 기준으로 들어가는 최대 크기를 슬라이더에 반영.
+    // 70%로도 안 들어가면 fitOk=false → 아래에서 '항목 줄이기' 안내.
+    const fitOk = autoFitOnePage ? applyOnePageFit(pages) : true;
 
     const themeColor = document.getElementById('themeHex')?.value || '#000000';
     const numColor = document.getElementById('numColorHex')?.value || '#000000';
@@ -2139,7 +2184,11 @@ function generateImages() {
             });
 
             if (statusChip) {
-                if (overflow) {
+                if (overflow && autoFitOnePage && !fitOk) {
+                    // 자동 맞춤이 최소(70%)까지 줄여도 한 장에 안 들어감 → 내용 자체를 줄여야 함
+                    statusChip.textContent = '⚠ 최소 크기로도 한 장에 다 담기지 않습니다 — 항목 수를 줄이거나 좌우 2단으로 나누세요';
+                    statusChip.className = 'status-chip warn';
+                } else if (overflow) {
                     statusChip.textContent = '⚠ 내용이 넘쳐 일부가 잘렸습니다 — 텍스트 크기 축소·컬럼 분리 권장';
                     statusChip.className = 'status-chip warn';
                 } else if (headerTextDropped) {
@@ -2777,6 +2826,15 @@ window.onload = () => {
         updateSliderBg(textScaleSlider);
         saveSnapshot();
     });
+
+    // 한 장에 자동 맞춤 토글: 켜면 슬라이더 잠그고 자동 최적 크기, 끄면 수동
+    document.getElementById('autoFitOnePage')?.addEventListener('change', e => {
+        autoFitOnePage = e.target.checked;
+        syncOnePageUI();
+        generateImages();   // 켜짐: 즉시 자동 맞춤 적용 / 꺼짐: 현재 수동 값으로 렌더
+        saveSnapshot();
+    });
+    syncOnePageUI();   // 초기 잠금 상태 반영
 
     // 텍스트 색상 피커
     const textColorPicker = document.getElementById('textColorPicker');

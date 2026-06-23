@@ -427,6 +427,9 @@ body {
     font-size: 11.5px; color: var(--text-muted); cursor: pointer; user-select: none;
 }
 .balance-opt input { cursor: pointer; }
+/* 한 장 자동 맞춤 ON: 수동 크기 슬라이더 잠금 시각화 */
+#textScaleGroup.auto-locked .slider-input,
+#textScaleGroup.auto-locked .label-tip-input { opacity: .45; pointer-events: none; }
 .colsplit-hint { font-size: 11px; color: var(--text-tertiary); }
 
 /* ══════════════════════════════════════════

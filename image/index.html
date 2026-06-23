@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"
         integrity="sha512-Qlv6VSKh1gDKGoJbnyA5RMXYcvnpIqhO++MhIM2fStMcGT9i2T//tSwYFlcyoRRDcDZ+TYHpH8azBBCyhpSeqw=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <link rel="stylesheet" href="style.css?v=20260622r">
+    <link rel="stylesheet" href="style.css?v=20260623h">
 </head>
 <body>
     <div class="bg-blur">
@@ -175,12 +175,15 @@
                         <input type="range" id="headerHeight" min="0" max="55" value="5" step="1" class="slider-input">
                     </div>
 
-                    <div class="design-group">
+                    <div class="design-group" id="textScaleGroup">
                         <div class="label-with-tip">
                             <span class="label-text">전체 텍스트 크기</span>
                             <span class="label-tip-wrap"><input type="number" id="textScaleLabel" class="label-tip-input" min="70" max="150" step="1" value="100"><span class="label-tip-unit">%</span></span>
                         </div>
                         <input type="range" id="textScale" min="70" max="150" value="100" step="1" class="slider-input">
+                        <label class="balance-opt" title="켜면 내용이 항상 A4 한 장에 들어가도록 글자 크기를 자동 조절합니다(슬라이더 잠금). 최소 크기로도 넘치면 항목을 줄이라고 안내합니다. 끄면 슬라이더로 직접 조절합니다.">
+                            <input type="checkbox" id="autoFitOnePage" checked> 한 장에 자동 맞춤
+                        </label>
                     </div>
                 </div>
 
@@ -273,6 +276,6 @@
         <input type="file" id="loadFileInput" accept=".json" style="display:none">
     </div>
 
-    <script src="main.js?v=20260623g"></script>
+    <script src="main.js?v=20260623h"></script>
 </body>
 </html>
