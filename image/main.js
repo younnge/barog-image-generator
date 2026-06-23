@@ -2403,57 +2403,25 @@ function showColorToast(msg) {
 /* ============================================================
  * 색상 동기화
  * ============================================================ */
+/* 색상 피커·헥스 입력·스와치 3종을 한 색상값으로 동기화하는 공통 처리. */
+function applyColorSync(pickerId, hexId, swatchId, upper) {
+    const picker = document.getElementById(pickerId);
+    const hexInput = document.getElementById(hexId);
+    const swatch = document.getElementById(swatchId);
+    if (picker) picker.value = upper;
+    if (hexInput) hexInput.value = upper;
+    if (swatch) swatch.style.backgroundColor = upper;
+}
 function updateColorSync(hex) {
     const upper = hex.toUpperCase();
-    const colorPicker = document.getElementById('themeColor');
-    const hexInput = document.getElementById('themeHex');
-    const swatch = document.getElementById('themeSwatch');
-    if (colorPicker) colorPicker.value = upper;
-    if (hexInput) hexInput.value = upper;
-    if (swatch) swatch.style.backgroundColor = upper;
-    syncPresetActive(upper);
+    applyColorSync('themeColor', 'themeHex', 'themeSwatch', upper);
+    syncPresetActive(upper);   // 테마색상만: 프리셋 활성화 + 제목 바 색상 동기화
     document.documentElement.style.setProperty('--h1-bar-color', upper);
 }
-
-function updateTextColorSync(hex) {
-    const upper = hex.toUpperCase();
-    const picker = document.getElementById('textColorPicker');
-    const hexInput = document.getElementById('textColorHex');
-    const swatch = document.getElementById('textColorSwatch');
-    if (picker) picker.value = upper;
-    if (hexInput) hexInput.value = upper;
-    if (swatch) swatch.style.backgroundColor = upper;
-}
-
-function updateNumColorSync(hex) {
-    const upper = hex.toUpperCase();
-    const picker = document.getElementById('numColorPicker');
-    const hexInput = document.getElementById('numColorHex');
-    const swatch = document.getElementById('numColorSwatch');
-    if (picker) picker.value = upper;
-    if (hexInput) hexInput.value = upper;
-    if (swatch) swatch.style.backgroundColor = upper;
-}
-
-function updateHlColorSync(hex) {
-    const upper = hex.toUpperCase();
-    const picker = document.getElementById('hlColorPicker');
-    const hexInput = document.getElementById('hlColorHex');
-    const swatch = document.getElementById('hlColorSwatch');
-    if (picker) picker.value = upper;
-    if (hexInput) hexInput.value = upper;
-    if (swatch) swatch.style.backgroundColor = upper;
-}
-
-function updateLabelBoxColorSync(hex) {
-    const upper = hex.toUpperCase();
-    const picker = document.getElementById('labelBoxColorPicker');
-    const hexInput = document.getElementById('labelBoxColorHex');
-    const swatch = document.getElementById('labelBoxColorSwatch');
-    if (picker) picker.value = upper;
-    if (hexInput) hexInput.value = upper;
-    if (swatch) swatch.style.backgroundColor = upper;
-}
+function updateTextColorSync(hex)     { applyColorSync('textColorPicker', 'textColorHex', 'textColorSwatch', hex.toUpperCase()); }
+function updateNumColorSync(hex)      { applyColorSync('numColorPicker', 'numColorHex', 'numColorSwatch', hex.toUpperCase()); }
+function updateHlColorSync(hex)       { applyColorSync('hlColorPicker', 'hlColorHex', 'hlColorSwatch', hex.toUpperCase()); }
+function updateLabelBoxColorSync(hex) { applyColorSync('labelBoxColorPicker', 'labelBoxColorHex', 'labelBoxColorSwatch', hex.toUpperCase()); }
 
 function updateSliderBg(slider) {
     const val = slider.value, min = slider.min || 0, max = slider.max || 100;
