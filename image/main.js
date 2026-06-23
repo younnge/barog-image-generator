@@ -1270,6 +1270,9 @@ function collectSectionRects(ctx, sections, colX, startY, maxY, colW, fonts) {
     return rects;
 }
 
+/* A4 페이지 바깥 여백(px)·컬럼 사이 가로 간격(px) — 측정/그리기 공통, 한 곳에서만 정의 */
+const MARGIN = 41;
+const COL_GAP = 15;
 /* 섹션 사이 기본 간격 */
 const SECTION_GAP = 15;
 /* 헤더(제목·기간) 아래와 섹션 시작 사이 간격. 작을수록 섹션이 상단 텍스트에 붙음 */
@@ -1288,7 +1291,6 @@ function getMeasureCtx() {
 /* drawA4Canvas 와 동일한 2컬럼 폭 계산 (높이 균형 계산 시 사용) */
 function computeTwoColW() {
     const { W } = CONFIG;
-    const MARGIN = 41, COL_GAP = 15;
     return Math.floor((W - MARGIN * 2 - COL_GAP) / 2);
 }
 
@@ -1339,7 +1341,6 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     ctx.fillRect(0, 0, W, H);
 
     const headerH = Math.round(H * headerRatio);
-    const MARGIN = 41;
 
     // 배경 이미지 — 전체 캔버스 cover
     if (bgImg) {
@@ -1354,7 +1355,6 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     // 컨텐츠 영역
     const contentTop = headerH + (headerH > 0 ? HEADER_CONTENT_GAP : MARGIN);
     const contentBottom = H - MARGIN;
-    const COL_GAP = 15;
     const twoColW = Math.floor((W - MARGIN * 2 - COL_GAP) / 2);
     const fullW = W - MARGIN * 2;
     const col1X = MARGIN;
@@ -1985,7 +1985,7 @@ function reorderDomBalanced() {
 function measurePageHeightAtScale(page, scale) {
     const ctx = getMeasureCtx();
     const { W, fonts } = CONFIG;
-    const MARGIN = 41, fullW = W - MARGIN * 2, twoColW = computeTwoColW();
+    const fullW = W - MARGIN * 2, twoColW = computeTwoColW();
     const scaleSec = sec => ({
         ...sec,
         titleSize: Math.round((sec.titleSize || 24) * scale),
@@ -2006,31 +2006,19 @@ function measurePageHeightAtScale(page, scale) {
 
 /* 헤더 높이를 반영한 컨텐츠 영역 가용 세로 높이(px). 넘침 판정·자동 크기 공통 사용. */
 function availableContentHeight() {
-    const { H } = CONFIG, MARGIN = 41;
+    const { H } = CONFIG;
     const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '5', 10)) / 100;
     const headerH = Math.round(H * headerRatio);
     return (H - MARGIN) - (headerH + (headerH > 0 ? HEADER_CONTENT_GAP : MARGIN));
 }
 
-/* '균등 맞춤' 시 1회성 자동 크기: 더 긴 컬럼이 페이지를 넘치지 않는 최대 전체 크기를
- * 70~150% 중 5% 단위로 찾아 슬라이더에 적용 (이후 사용자가 자유롭게 재조절 가능). */
+/* '균등 맞춤' 시 1회성 자동 크기: 페이지를 넘치지 않는 최대 전체 크기를 슬라이더에 적용.
+ * 크기 탐색은 applyOnePageFit(이분탐색)와 동일 로직 공유 — 결과 동일, 측정 81회→~7회. */
 function autoFitTextScale() {
-    const slider = document.getElementById('textScale');
-    if (!slider) return;
-    const available = availableContentHeight();
     const pages = parseDomToPages();
     if (!pages.length) return;
     pages.forEach(page => page.rows.forEach(row => { if (row.type === 'split' && row.right.length === 0) balanceRow(row); }));
-    // 1% 단위 정밀 탐색: 페이지에 들어가는 '최대' 크기를 찾아 잔여 공간을 최소화
-    // → 하단 정확 맞춤 시 간격이 최소(SECTION_GAP)에 가깝게 유지됨
-    let chosen = 70;
-    for (let s = 150; s >= 70; s -= 1) {
-        if (measurePageHeightAtScale(pages[0], s / 100) <= available) { chosen = s; break; }
-    }
-    slider.value = chosen;
-    const label = document.getElementById('textScaleLabel');
-    if (label) label.value = chosen;
-    updateSliderBg(slider);
+    applyOnePageFit(pages);
 }
 
 /* 슬라이더 값 설정(라벨·배경 동기화). */
