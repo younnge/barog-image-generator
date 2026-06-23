@@ -2033,6 +2033,14 @@ function setTextScaleValue(v) {
     if (label) label.value = v;
     if (slider) updateSliderBg(slider);
 }
+/* 헤더 높이 슬라이더 값 설정(라벨·배경 동기화). */
+function setHeaderHeightValue(v) {
+    const slider = document.getElementById('headerHeight');
+    if (slider) slider.value = v;
+    const label = document.getElementById('headerHeightLabel');
+    if (label) label.value = v;
+    if (slider) updateSliderBg(slider);
+}
 
 /* '한 장에 자동 맞춤' UI 동기화: 켜지면 수동 슬라이더를 잠가(자동 제어) 혼동을 막는다. */
 function syncOnePageUI() {
@@ -2545,6 +2553,40 @@ function toggleBalanceLayout() {
     generateImages();
     saveSnapshot();
 }
+
+/* '한 번에 자동 맞춤': 좌우 2단 균형 + 위·아래 끝 맞춤 + 텍스트 크기 + 헤더 높이를
+ * 한 번에 자동 계산해 결과를 슬라이더·토글에 채워 넣는다. (슬라이더는 이후 수동 조절 가능)
+ * 헤더 제목은 22px 고정·1줄이라, 헤더는 '제목/기간 있으면 5%, 없으면 0%'면 충분. */
+function autoLayoutAll() {
+    // ① 헤더 높이 자동: 헤더 텍스트(제목·기간·우측문구) 유무로 결정
+    const hasHeaderText = !!((document.getElementById('topText')?.value || '').trim()
+        || (document.getElementById('periodText')?.value || '').trim()
+        || (document.getElementById('periodNote')?.value || '').trim());
+    setHeaderHeightValue(hasHeaderText ? 5 : 0);
+
+    // ② 좌우 2단 균형(켜진 상태로 새로 맞춤 — 섹션이 적으면 reorderDomBalanced가 알아서 단일 유지)
+    if (layoutBalanced) restoreBalanceSnapshot();   // 이전 균형 흔적(자동 구분선 등) 정리
+    layoutBalanced = true;
+    balanceStale = false;
+    captureBalanceSnapshot();
+    reorderDomBalanced();
+
+    // ③ 위·아래 끝까지 채우기 ON
+    balanceBottomExact = true;
+    const beCb = document.getElementById('balanceBottomExact');
+    if (beCb) beCb.checked = true;
+
+    // ④ 텍스트 크기: 위에서 정한 헤더를 반영해 한 장에 들어가는 최대 크기로
+    autoFitTextScale();
+
+    refreshAccordionVisibility();
+    refreshBookmarks();
+    applyColumnTabFilter();
+    updateBalanceBtn();            // syncBottomExactUI 포함(위·아래 끝 토글 활성화)
+    generateImages();
+    saveSnapshot();
+    showColorToast('한 번에 자동 맞춤 완료 — 슬라이더로 미세 조정할 수 있어요');
+}
 function updateBalanceBtn() {
     const btn = document.getElementById('btnBalance');
     if (!btn) return;
@@ -2948,6 +2990,7 @@ window.onload = () => {
     });
     document.getElementById('btnToggleAll').addEventListener('click', toggleAllSections);
     document.getElementById('btnBalance').addEventListener('click', toggleBalanceLayout);
+    document.getElementById('btnAutoAll')?.addEventListener('click', autoLayoutAll);
     document.getElementById('balanceBottomExact')?.addEventListener('change', e => {
         balanceBottomExact = e.target.checked;
         // 켜진 균등 맞춤에 즉시 반영: 잔여를 다시 계산해 최적 크기로 맞춤
