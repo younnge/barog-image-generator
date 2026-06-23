@@ -6,6 +6,7 @@ let cachedBgImg = null;
 let isBackedUp = true;
 let activeColumnTab = 'all';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
+let balanceBottomExact = true;   // 균등 맞춤 시 두 컬럼 하단을 bottomY에 정확히 일치(A토글) — 기본 ON
 let balanceSnapshot = null;   // 균등 맞춤 켜기 직전 상태(DOM 순서·텍스트 크기) — 끌 때 원상복구용
 let balanceAutoBreak = null;  // 균등 맞춤 켤 때 자동 생성한 컬럼 구분선(끌 때 이 노드만 제거)
 let balanceStale = false;     // 균등 맞춤 켠 뒤 내용이 바뀌어 재정렬이 필요한 상태
@@ -201,6 +202,7 @@ function getSnapshot() {
         headerHeight: document.getElementById('headerHeight')?.value || '5',
         textScale: document.getElementById('textScale')?.value || '100',
         balanced: layoutBalanced,
+        bottomExact: balanceBottomExact,
         items
     };
 }
@@ -239,6 +241,11 @@ function restoreSnapshot(data) {
     layoutBalanced = !!data.balanced;
     // 복원은 새 기준선 — 이전 DOM을 가리키던 균등 맞춤 상태는 모두 초기화
     balanceSnapshot = null; balanceAutoBreak = null; balanceStale = false;
+    if (data.bottomExact !== undefined) {
+        balanceBottomExact = !!data.bottomExact;
+        const cb = document.getElementById('balanceBottomExact');
+        if (cb) cb.checked = balanceBottomExact;
+    }
     updateBalanceBtn();
     if (data.topText !== undefined) { const el = document.getElementById('topText'); el.value = data.topText; autoResizeTextarea(el); }
     if (data.periodText !== undefined) document.getElementById('periodText').value = data.periodText;
@@ -1259,16 +1266,21 @@ function computeTwoColW() {
 
 /* 한 컬럼 내 섹션 y좌표 계산.
  * justify=true 이면 남는 세로 공간을 섹션 사이 간격에 균등 분배해 두 컬럼 하단을 맞춤.
- * 단 간격은 MAX_JUSTIFY_GAP 으로 상한 — 내용이 적으면 상단 정렬 + 하단 여백으로 남김.
+ *   - bottomExact=false: 간격을 MAX_JUSTIFY_GAP 으로 상한 — 내용이 적으면 상단 정렬 + 하단 여백.
+ *   - bottomExact=true : 상한 없이 남는 공간을 전부 간격에 분배해 마지막 섹션 하단을 bottomY 에 정확히 맞춤.
+ *     (잔여가 작을수록 간격은 최소(SECTION_GAP)에 가까움 — 텍스트 크기 최적화로 잔여를 줄임)
  * 섹션이 1개뿐이면 분배할 간격이 없어 상단 정렬로 둠. */
-function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify) {
+function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify, bottomExact) {
     const heights = sections.map(sec => measureSection(ctx, sec, colW, fonts));
     const contentH = heights.reduce((a, b) => a + b, 0);
     let gap = SECTION_GAP;
     if (justify && sections.length > 1) {
         const avail = bottomY - startY - contentH;            // 남는 세로 공간
-        // 간격에 균등 분배하되 상한을 둠 — 상한 초과분은 하단 여백으로 남김(상단 정렬)
-        if (avail > 0) gap = Math.min(avail / (sections.length - 1), MAX_JUSTIFY_GAP);
+        if (avail > 0) {
+            const evenGap = avail / (sections.length - 1);
+            // 하단 정확 맞춤: 상한 없이 전부 분배(바닥 정확 일치). 일반: 상한으로 빈 느낌 방지.
+            gap = bottomExact ? Math.max(SECTION_GAP, evenGap) : Math.min(evenGap, MAX_JUSTIFY_GAP);
+        }
     }
     const positions = [];
     let y = startY;
@@ -1284,7 +1296,7 @@ function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify) {
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', labelBoxColor = '#000000', balance = false) {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', labelBoxColor = '#000000', balance = false, bottomExact = false) {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -1333,8 +1345,8 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
             cy += h + SECTION_GAP;
         } else {
             const justify = balance && ri === lastRowIdx;
-            const left = layoutColumn(ctx, row.left, cy, contentBottom, twoColW, fonts, justify);
-            const right = layoutColumn(ctx, row.right, cy, contentBottom, twoColW, fonts, justify);
+            const left = layoutColumn(ctx, row.left, cy, contentBottom, twoColW, fonts, justify, bottomExact);
+            const right = layoutColumn(ctx, row.right, cy, contentBottom, twoColW, fonts, justify, bottomExact);
             rowLayouts.push({ type: 'split', left, right });
             cy = Math.max(left.endY, right.endY) + SECTION_GAP;
         }
@@ -2044,8 +2056,10 @@ function autoFitTextScale() {
     const pages = parseDomToPages();
     if (!pages.length) return;
     pages.forEach(page => page.rows.forEach(row => { if (row.type === 'split' && row.right.length === 0) balanceRow(row); }));
+    // 1% 단위 정밀 탐색: 페이지에 들어가는 '최대' 크기를 찾아 잔여 공간을 최소화
+    // → 하단 정확 맞춤 시 간격이 최소(SECTION_GAP)에 가깝게 유지됨
     let chosen = 70;
-    for (let s = 150; s >= 70; s -= 5) {
+    for (let s = 150; s >= 70; s -= 1) {
         if (measurePageHeightAtScale(pages[0], s / 100) <= available) { chosen = s; break; }
     }
     slider.value = chosen;
@@ -2111,7 +2125,7 @@ function generateImages() {
                 });
             }
             const canvases = pages.map(page =>
-                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, labelBoxColor, layoutBalanced)
+                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact)
             );
 
             generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -2931,6 +2945,13 @@ window.onload = () => {
     });
     document.getElementById('btnToggleAll').addEventListener('click', toggleAllSections);
     document.getElementById('btnBalance').addEventListener('click', toggleBalanceLayout);
+    document.getElementById('balanceBottomExact')?.addEventListener('change', e => {
+        balanceBottomExact = e.target.checked;
+        // 켜진 균등 맞춤에 즉시 반영: 잔여를 다시 계산해 최적 크기로 맞춤
+        if (layoutBalanced) autoFitTextScale();
+        generateImages();
+        saveSnapshot();
+    });
 
     // itemsContainer 이벤트 위임
     const container = document.getElementById('itemsContainer');

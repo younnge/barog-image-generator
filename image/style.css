@@ -416,6 +416,17 @@ body {
 /* 균등 맞춤 켠 뒤 내용이 바뀐 상태(재정렬 필요) — 주의 환기용 주황 강조 */
 .btn-toggle-all.btn-toggle-stale { background: #FF9500; color: #fff; }
 .btn-toggle-all.btn-toggle-stale:hover { background: #FF9500; color: #fff; filter: brightness(.95); }
+/* 디자인 탭 하단 전폭 균등 맞춤 버튼 */
+.btn-balance-full {
+    width: 100%; padding: 11px 14px; font-size: 12.5px; border-radius: var(--radius-md);
+    background: rgba(0,0,0,0.05); color: var(--text-main); margin-top: 4px;
+}
+.btn-balance-full:hover { background: rgba(0,0,0,0.09); }
+.balance-opt {
+    display: flex; align-items: center; gap: 6px; margin-top: 2px;
+    font-size: 11.5px; color: var(--text-muted); cursor: pointer; user-select: none;
+}
+.balance-opt input { cursor: pointer; }
 .colsplit-hint { font-size: 11px; color: var(--text-tertiary); }
 
 /* ══════════════════════════════════════════
