@@ -422,11 +422,32 @@ body {
     background: rgba(0,0,0,0.05); color: var(--text-main); margin-top: 4px;
 }
 .btn-balance-full:hover { background: rgba(0,0,0,0.09); }
-.balance-opt {
-    display: flex; align-items: center; gap: 6px; margin-top: 2px;
-    font-size: 11.5px; color: var(--text-muted); cursor: pointer; user-select: none;
+/* ── ON/OFF 토글 스위치 행 (라벨 + 설명) ── */
+.toggle-row {
+    display: flex; align-items: center; gap: 11px; margin-top: 6px;
+    cursor: pointer; user-select: none;
 }
-.balance-opt input { cursor: pointer; }
+.toggle-row.toggle-sub { margin-top: 8px; padding-left: 4px; }   /* 균등 맞춤의 세부 옵션: 살짝 들여쓰기 */
+.toggle-text { display: flex; flex-direction: column; line-height: 1.32; }
+.toggle-label { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.toggle-desc { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+/* 스위치 본체 */
+.switch { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.switch .track { position: absolute; inset: 0; background: #cbd5e1; border-radius: 999px; transition: background .2s; }
+.switch .track::before {
+    content: ''; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px;
+    background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s;
+}
+.switch input:checked + .track { background: var(--primary); }
+.switch input:checked + .track::before { transform: translateX(16px); }
+.switch input:focus-visible + .track { box-shadow: 0 0 0 3px rgba(37,99,235,.35); }
+/* ③ 종속 옵션 비활성(균등 맞춤 꺼짐) — 흐리게 + 클릭 불가 */
+.toggle-row.disabled { cursor: not-allowed; }
+.toggle-row.disabled .toggle-label,
+.toggle-row.disabled .toggle-desc { opacity: .5; }
+.toggle-row.disabled .switch input { cursor: not-allowed; }
+.toggle-row.disabled .switch .track { opacity: .45; }
 /* 한 장 자동 맞춤 ON: 수동 크기 슬라이더 잠금 시각화 */
 #textScaleGroup.auto-locked .slider-input,
 #textScaleGroup.auto-locked .label-tip-input { opacity: .45; pointer-events: none; }

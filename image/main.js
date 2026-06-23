@@ -2558,6 +2558,19 @@ function updateBalanceBtn() {
         btn.textContent = layoutBalanced ? '균등 맞춤 ✓' : '좌우 균등 맞춤';
         btn.title = '좌우 컬럼 높이를 자동으로 균등 배분하고 남는 간격을 균등 분배합니다';
     }
+    syncBottomExactUI();
+}
+/* ③ '위·아래 끝 맞추기'는 좌우 균등 맞춤이 켜졌을 때만 의미 → 꺼져 있으면 비활성(흐림) + 안내. */
+function syncBottomExactUI() {
+    const row = document.getElementById('bottomExactRow');
+    const cb = document.getElementById('balanceBottomExact');
+    if (!row || !cb) return;
+    cb.disabled = !layoutBalanced;
+    row.classList.toggle('disabled', !layoutBalanced);
+    const desc = row.querySelector('.toggle-desc');
+    if (desc) desc.textContent = layoutBalanced
+        ? '좌우 칸 아래 끝을 페이지 끝에 맞춤'
+        : '먼저 «좌우 균등 맞춤»을 켜면 사용할 수 있어요';
 }
 
 /* ============================================================
@@ -2762,6 +2775,7 @@ window.onload = () => {
         saveSnapshot();
     });
     syncOnePageUI();   // 초기 잠금 상태 반영
+    syncBottomExactUI();   // '위·아래 끝 맞추기' 초기 활성/비활성 반영
 
     // 텍스트 색상 피커
     const textColorPicker = document.getElementById('textColorPicker');
