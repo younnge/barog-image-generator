@@ -7,6 +7,8 @@ let isBackedUp = true;
 let activeColumnTab = 'all';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
 let balanceSnapshot = null;   // 균등 맞춤 켜기 직전 상태(DOM 순서·텍스트 크기) — 끌 때 원상복구용
+let balanceAutoBreak = null;  // 균등 맞춤 켤 때 자동 생성한 컬럼 구분선(끌 때 이 노드만 제거)
+let balanceStale = false;     // 균등 맞춤 켠 뒤 내용이 바뀌어 재정렬이 필요한 상태
 let undoHistory = [];
 let redoHistory = [];
 const MAX_UNDO = 100;
@@ -194,7 +196,7 @@ function getSnapshot() {
         numColor: document.getElementById('numColorHex')?.value || '#000000',
         hlColor: document.getElementById('hlColorHex')?.value || '#FFEB3B',
         labelBoxColor: document.getElementById('labelBoxColorHex')?.value || '#000000',
-        headerHeight: document.getElementById('headerHeight')?.value || '28',
+        headerHeight: document.getElementById('headerHeight')?.value || '5',
         textScale: document.getElementById('textScale')?.value || '100',
         balanced: layoutBalanced,
         items
@@ -230,6 +232,8 @@ function restoreSnapshot(data) {
     if (typeof data === 'string') data = JSON.parse(data);
     if (!data) return;
     layoutBalanced = !!data.balanced;
+    // 복원은 새 기준선 — 이전 DOM을 가리키던 균등 맞춤 상태는 모두 초기화
+    balanceSnapshot = null; balanceAutoBreak = null; balanceStale = false;
     updateBalanceBtn();
     if (data.topText !== undefined) { const el = document.getElementById('topText'); el.value = data.topText; autoResizeTextarea(el); }
     if (data.periodText !== undefined) document.getElementById('periodText').value = data.periodText;
@@ -1858,12 +1862,18 @@ function partitionByHeight(heights) {
     const half = Math.floor(total / 2);
     let bestS = 0;
     for (let s = total - half; s >= 0; s--) { if (reach[n][s]) { bestS = s; break; } }
-    // 역추적: 어떤 섹션이 좌측인지
+    // 역추적: 어떤 섹션이 좌측인지.
+    // 좌/우 어느 쪽에 넣어도 최적 높이합(bestS)이 유지되는 갈림길에서는
+    // 섹션 '개수'가 더 적은 쪽에 배정해 시각적 균형(높이 같아도 한쪽만 빽빽해지는 현상)을 보완.
     const inLeft = new Array(n).fill(false);
-    let s = bestS;
+    let s = bestS, leftCount = 0, rightCount = 0;
     for (let i = n; i >= 1; i--) {
         const hi = ints[i - 1];
-        if (s - hi >= 0 && reach[i - 1][s - hi]) { inLeft[i - 1] = true; s -= hi; }
+        const canLeft = s - hi >= 0 && reach[i - 1][s - hi];
+        const canRight = reach[i - 1][s];
+        const goLeft = (canLeft && canRight) ? leftCount <= rightCount : canLeft;
+        if (goLeft) { inLeft[i - 1] = true; s -= hi; leftCount++; }
+        else rightCount++;
     }
     return inLeft;
 }
@@ -1950,7 +1960,13 @@ function reorderDomBalanced() {
     const breaks = Array.from(container.querySelectorAll('.column-break-wrapper'));
     breaks.slice(1).forEach(b => b.remove());
     let brk = breaks[0];
-    if (!brk) { addColumnBreak(); brk = container.querySelector('.column-break-wrapper'); }
+    if (!brk) {
+        addColumnBreak();
+        brk = container.querySelector('.column-break-wrapper');
+        balanceAutoBreak = brk;        // 자동 생성됨 → 끌 때 이 노드만 제거
+    } else {
+        balanceAutoBreak = null;       // 기존 사용자 구분선 사용 → 제거 대상 아님
+    }
 
     // 4) DOM 재배치: [전체폭들][좌측 섹션들][구분선][우측 섹션들]
     const order = [];
@@ -1989,7 +2005,7 @@ function measurePageHeightAtScale(page, scale) {
 /* 헤더 높이를 반영한 컨텐츠 영역 가용 세로 높이(px). 넘침 판정·자동 크기 공통 사용. */
 function availableContentHeight() {
     const { H } = CONFIG, MARGIN = 41;
-    const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '28', 10)) / 100;
+    const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '5', 10)) / 100;
     const headerH = Math.round(H * headerRatio);
     return (H - MARGIN) - (headerH + (headerH > 0 ? HEADER_CONTENT_GAP : MARGIN));
 }
@@ -2040,7 +2056,7 @@ function generateImages() {
     const numColor = document.getElementById('numColorHex')?.value || '#000000';
     const hlColor = document.getElementById('hlColorHex')?.value || '#FFEB3B';
     const labelBoxColor = document.getElementById('labelBoxColorHex')?.value || '#000000';
-    const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '28', 10)) / 100;
+    const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '5', 10)) / 100;
     const topText = document.getElementById('topText')?.value || '';
     const periodText = document.getElementById('periodText')?.value || '';
     const periodNote = document.getElementById('periodNote')?.value || '';
@@ -2464,11 +2480,14 @@ function captureBalanceSnapshot() {
 function restoreBalanceSnapshot() {
     if (!balanceSnapshot) return;
     const container = document.getElementById('itemsContainer');
+    // 켤 때 자동 생성한 구분선만 제거 (사용자가 추가한 내용은 절대 지우지 않음)
+    if (balanceAutoBreak && balanceAutoBreak.isConnected) balanceAutoBreak.remove();
+    balanceAutoBreak = null;
+    // 저장해 둔 원래 순서대로 다시 배치 (스냅샷에 있던 노드만)
     const keep = new Set(balanceSnapshot.order);
-    // 켜질 때 새로 만들어진 노드(자동 생성된 컬럼 구분선 등)는 제거
-    Array.from(container.children).forEach(n => { if (!keep.has(n)) n.remove(); });
-    // 저장해 둔 원래 순서대로 다시 배치
     balanceSnapshot.order.forEach(n => { if (n.isConnected) container.appendChild(n); });
+    // 균등 맞춤 중 새로 추가된 노드는 원래 내용 뒤에 그대로 이어 붙여 보존
+    Array.from(container.children).forEach(n => { if (!keep.has(n)) container.appendChild(n); });
     // 텍스트 크기 슬라이더 복원
     const slider = document.getElementById('textScale');
     if (slider && balanceSnapshot.textScale != null) {
@@ -2480,15 +2499,32 @@ function restoreBalanceSnapshot() {
     balanceSnapshot = null;
 }
 
+/* 균등 맞춤이 켜진 상태에서 내용이 바뀌면 재정렬 필요 표시 (편집 이벤트에서 호출). */
+function markBalanceStale() {
+    if (!layoutBalanced || balanceStale) return;
+    balanceStale = true;
+    updateBalanceBtn();
+}
+
 /* '좌우 균등 맞춤' 토글: 켜면 섹션 DOM·구분선을 높이 균형대로 실제 재배치 + 간격 균등 분배.
- * 끄면 켜기 직전 상태(DOM 순서·텍스트 크기)로 원상복구. */
+ * 끄면 켜기 직전 상태(DOM 순서·텍스트 크기)로 원상복구.
+ * 켜진 채 내용이 바뀐(stale) 상태에서 누르면: 끄지 않고 원래 기준으로 다시 맞춤. */
 function toggleBalanceLayout() {
-    layoutBalanced = !layoutBalanced;
-    if (layoutBalanced) {
+    if (layoutBalanced && balanceStale) {
+        restoreBalanceSnapshot();      // 이전 균형 흔적(자동 구분선 등) 정리 후 원본 기준 복귀
+        captureBalanceSnapshot();      // 갱신된 내용을 새 기준으로 저장
+        reorderDomBalanced();          // 다시 좌/우 균형 배치
+        autoFitTextScale();
+        balanceStale = false;
+    } else if (!layoutBalanced) {
+        layoutBalanced = true;
+        balanceStale = false;
         captureBalanceSnapshot();      // 되돌리기용 원래 상태 저장
         reorderDomBalanced();          // 설정 패널의 섹션·구분선을 좌/우로 실제 정리
         autoFitTextScale();            // 적절한 전체 텍스트 크기 1회 자동 설정
     } else {
+        layoutBalanced = false;
+        balanceStale = false;
         restoreBalanceSnapshot();      // 켜기 직전 배치·크기로 복원
     }
     refreshAccordionVisibility();  // 섹션 그룹/접힘 상태 갱신
@@ -2502,7 +2538,15 @@ function updateBalanceBtn() {
     const btn = document.getElementById('btnBalance');
     if (!btn) return;
     btn.classList.toggle('btn-toggle-active', layoutBalanced);
-    btn.textContent = layoutBalanced ? '균등 맞춤 ✓' : '좌우 균등 맞춤';
+    btn.classList.toggle('btn-toggle-stale', layoutBalanced && balanceStale);
+    btn.setAttribute('aria-pressed', layoutBalanced ? 'true' : 'false');   // 토글 상태 스크린리더 노출
+    if (layoutBalanced && balanceStale) {
+        btn.textContent = '다시 맞추기 ⟳';
+        btn.title = '내용이 바뀌었습니다 — 클릭하면 좌우 균형을 다시 맞춥니다';
+    } else {
+        btn.textContent = layoutBalanced ? '균등 맞춤 ✓' : '좌우 균등 맞춤';
+        btn.title = '좌우 컬럼 높이를 자동으로 균등 배분하고 남는 간격을 균등 분배합니다';
+    }
 }
 
 /* ============================================================
@@ -2656,7 +2700,7 @@ window.onload = () => {
     });
     headerHeightInput.addEventListener('blur', () => {
         let v = parseInt(headerHeightInput.value);
-        if (isNaN(v)) v = 28;
+        if (isNaN(v)) v = 5;
         v = Math.min(Math.max(v, 0), 55);
         headerHeightInput.value = v;
         slider.value = v;
@@ -2823,7 +2867,7 @@ window.onload = () => {
 
     // 항목 추가 버튼
     document.getElementById('addSectionBtn').addEventListener('click', () => {
-        saveSnapshot(); const el = addSectionTitle();
+        saveSnapshot(); markBalanceStale(); const el = addSectionTitle();
         if (activeColumnTab === 'left') {
             const c = document.getElementById('itemsContainer');
             const cb = c.querySelector('.column-break-wrapper');
@@ -2833,7 +2877,7 @@ window.onload = () => {
         scrollToItem(el);
     });
     document.getElementById('addItemBtn').addEventListener('click', () => {
-        saveSnapshot(); const el = addItemRow();
+        saveSnapshot(); markBalanceStale(); const el = addItemRow();
         if (activeColumnTab === 'left') {
             const c = document.getElementById('itemsContainer');
             const cb = c.querySelector('.column-break-wrapper');
@@ -2843,7 +2887,7 @@ window.onload = () => {
         scrollToItem(el);
     });
     document.getElementById('addColumnBreakBtn').addEventListener('click', () => {
-        saveSnapshot(); addColumnBreak(); applyColumnTabFilter();
+        saveSnapshot(); markBalanceStale(); addColumnBreak(); applyColumnTabFilter();
     });
     document.querySelectorAll('.col-tab').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -2868,6 +2912,7 @@ window.onload = () => {
         if (t.matches('.btn-input')) {
             if (t.tagName === 'TEXTAREA') autoResizeTextarea(t);
             if (t.classList.contains('section-title-input') || t.classList.contains('item-name')) updateViolationUI(t);
+            markBalanceStale();
             debouncedGenerateImages();
             handleInputSnapshot();
         }
@@ -2887,6 +2932,7 @@ window.onload = () => {
         ta.focus();
         autoResizeTextarea(ta);
         updateViolationUI(ta);
+        markBalanceStale();
         debouncedGenerateImages();
         handleInputSnapshot();
     });
@@ -2900,6 +2946,10 @@ window.onload = () => {
         if (e.target.matches('.btn-input')) setTimeout(() => { updateViolationUI(e.target); saveSnapshot(); }, 0);
     });
     container.addEventListener('click', e => {
+        // 내용·구조를 바꾸는 조작이면 균등 맞춤 재정렬 필요 표시
+        if (e.target.closest('.js-add-price-slot, .js-dup-price-slot, .js-remove-price-slot, .js-del-section, .js-dup-section, .js-del-item, .js-dup-item, .js-del-colbreak, .js-layout-split, .js-layout-full')) {
+            markBalanceStale();
+        }
         // 가격 슬롯 추가
         if (e.target.closest('.js-add-price-slot')) {
             const row = e.target.closest('.item-row');

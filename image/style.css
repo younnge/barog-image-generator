@@ -404,6 +404,9 @@ body {
 .btn-toggle-all:hover { background: rgba(0,0,0,0.08); color: var(--text-main); }
 .btn-toggle-all.btn-toggle-active { background: var(--primary); color: #fff; }
 .btn-toggle-all.btn-toggle-active:hover { background: var(--primary); color: #fff; filter: brightness(.95); }
+/* 균등 맞춤 켠 뒤 내용이 바뀐 상태(재정렬 필요) — 주의 환기용 주황 강조 */
+.btn-toggle-all.btn-toggle-stale { background: #FF9500; color: #fff; }
+.btn-toggle-all.btn-toggle-stale:hover { background: #FF9500; color: #fff; filter: brightness(.95); }
 .colsplit-hint { font-size: 11px; color: var(--text-tertiary); }
 
 /* ══════════════════════════════════════════

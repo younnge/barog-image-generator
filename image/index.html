@@ -161,9 +161,9 @@
                 <div class="design-group">
                     <div class="label-with-tip">
                         <span class="label-text">헤더 높이</span>
-                        <span class="label-tip-wrap"><input type="number" id="headerHeightLabel" class="label-tip-input" min="0" max="55" step="1" value="28"><span class="label-tip-unit">%</span></span>
+                        <span class="label-tip-wrap"><input type="number" id="headerHeightLabel" class="label-tip-input" min="0" max="55" step="1" value="5"><span class="label-tip-unit">%</span></span>
                     </div>
-                    <input type="range" id="headerHeight" min="0" max="55" value="28" step="1" class="slider-input">
+                    <input type="range" id="headerHeight" min="0" max="55" value="5" step="1" class="slider-input">
                 </div>
 
                 <div class="design-group">
@@ -183,7 +183,7 @@
                         <span class="items-tab-title">항목 구성</span>
                         <div style="display:flex;gap:6px;align-items:center;">
                             <span class="colsplit-hint" id="colSplitHint"></span>
-                            <button class="btn-toggle-all" id="btnBalance" title="좌우 컬럼 높이를 자동으로 균등 배분하고 남는 간격을 균등 분배합니다">좌우 균등 맞춤</button>
+                            <button class="btn-toggle-all" id="btnBalance" aria-pressed="false" title="좌우 컬럼 높이를 자동으로 균등 배분하고 남는 간격을 균등 분배합니다">좌우 균등 맞춤</button>
                             <button class="btn-toggle-all" id="btnToggleAll">모두 접기</button>
                         </div>
                     </div>
@@ -259,6 +259,6 @@
         <input type="file" id="loadFileInput" accept=".json" style="display:none">
     </div>
 
-    <script src="main.js?v=20260623a"></script>
+    <script src="main.js?v=20260623b"></script>
 </body>
 </html>
