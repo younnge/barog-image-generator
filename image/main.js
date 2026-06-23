@@ -1694,22 +1694,12 @@ function tokenizePriceText(str) {
     return tokens;
 }
 
-function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSize, fonts, numSize = 35, labelBoxColor = '#000000') {
-    const tiers = [];
-    if (item.prices?.length) {
-        item.prices.forEach(p => { if (p.label || p.val) tiers.push({ label: p.label, price: p.val }); });
-    } else {
-        if (item.p1 || item.p1Label) tiers.push({ label: item.p1Label, price: item.p1 });
-        if (item.p2 || item.p2Label) tiers.push({ label: item.p2Label, price: item.p2 });
-        if (item.p3 || item.p3Label) tiers.push({ label: item.p3Label, price: item.p3 });
-    }
-    if (!tiers.length) return;
-
+/* 한 행의 가격 티어들을 rightX 기준 우→좌로 그림(숫자 시각 중앙을 centerY에 정렬).
+ * 단일행(drawPriceTiers)·다행(drawPriceTierRows) 양쪽이 공유. */
+function drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labelBoxColor) {
     const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = Math.round(numSize * 0.37);  // 라벨 칩 (금액 크기 연동)
     const CHIP_H = Math.round(CHIP_LABEL_SIZE * 2);
     const TIER_GAP = 14;
-    let x = rightX;
-    ctx.letterSpacing = '-1.5px';
 
     // 숫자 폰트 메트릭으로 baseline 계산 → 숫자 시각적 중앙을 centerY에 정렬
     ctx.textBaseline = 'alphabetic';
@@ -1717,6 +1707,8 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
     const _nm = ctx.measureText('0');
     const baselineY = centerY + (_nm.actualBoundingBoxAscent - _nm.actualBoundingBoxDescent) / 2;
 
+    let x = rightX;
+    ctx.letterSpacing = '-1.5px';
     for (let i = tiers.length - 1; i >= 0; i--) {
         const tier = tiers[i];
         if (tier.price) {
@@ -1730,8 +1722,7 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
                 ctx.fillStyle = isNum ? numColor : '#111111';
                 ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
                 const tw = ctx.measureText(tok.text).width;
-                ctx.fillText(tok.text, px, baselineY);
-                px -= tw;
+                ctx.fillText(tok.text, px, baselineY); px -= tw;
                 if (t > 0 && tokens[t - 1].type !== tok.type) px -= 2;
             }
             x = px - (tier.label ? 10 : 0);
@@ -1743,9 +1734,7 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
             const chipX = x - chipW;
             ctx.fillStyle = labelBoxColor;
             roundRect(ctx, chipX, centerY - CHIP_H / 2, chipW, CHIP_H, CHIP_H / 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(tier.label, chipX + chipW / 2, centerY);
             x = chipX - (i > 0 ? TIER_GAP : 0);
         } else if (i > 0) {
@@ -1754,54 +1743,16 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
     }
 }
 
+function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSize, fonts, numSize = 35, labelBoxColor = '#000000') {
+    const tiers = buildTiers(item);
+    if (!tiers.length) return;
+    drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labelBoxColor);
+}
+
 function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fonts, numSize, TIER_H = 35, ROW_GAP = 6, labelBoxColor = '#000000') {
-    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = Math.round(numSize * 0.37);  // 라벨 칩 (금액 크기 연동)
-    const CHIP_H = Math.round(CHIP_LABEL_SIZE * 2);
-    const TIER_GAP = 14;
-
     for (let ri = 0; ri < tierRows.length; ri++) {
-        const row = tierRows[ri];
         const centerY = topY + ri * (TIER_H + ROW_GAP) + TIER_H / 2;
-
-        ctx.textBaseline = 'alphabetic';
-        ctx.font = `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}`;
-        const _nm = ctx.measureText('0');
-        const baselineY = centerY + (_nm.actualBoundingBoxAscent - _nm.actualBoundingBoxDescent) / 2;
-
-        let x = rightX;
-        ctx.letterSpacing = '-1.5px';
-        for (let i = row.length - 1; i >= 0; i--) {
-            const tier = row[i];
-            if (tier.price) {
-                const tokens = tokenizePriceText(tier.price);
-                let px = x;
-                for (let t = tokens.length - 1; t >= 0; t--) {
-                    const tok = tokens[t];
-                    const isNum = tok.type === 'num';
-                    ctx.letterSpacing = isNum ? '-1.5px' : '0px';
-                    ctx.font = isNum ? `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}` : `400 ${UNIT_SIZE}px ${fonts.main}`;
-                    ctx.fillStyle = isNum ? numColor : '#111111';
-                    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
-                    const tw = ctx.measureText(tok.text).width;
-                    ctx.fillText(tok.text, px, baselineY); px -= tw;
-                    if (t > 0 && tokens[t - 1].type !== tok.type) px -= 2;
-                }
-                x = px - (tier.label ? 10 : 0);
-            }
-            if (tier.label) {
-                ctx.font = `500 ${CHIP_LABEL_SIZE}px ${fonts.medium}`;
-                const lw = ctx.measureText(tier.label).width;
-                const chipW = lw + 18;
-                const chipX = x - chipW;
-                ctx.fillStyle = labelBoxColor;
-                roundRect(ctx, chipX, centerY - CHIP_H / 2, chipW, CHIP_H, CHIP_H / 2);
-                ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText(tier.label, chipX + chipW / 2, centerY);
-                x = chipX - (i > 0 ? TIER_GAP : 0);
-            } else if (i > 0) {
-                x -= TIER_GAP;
-            }
-        }
+        drawTierRow(ctx, tierRows[ri], rightX, centerY, numColor, fonts, numSize, labelBoxColor);
     }
 }
 
