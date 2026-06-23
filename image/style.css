@@ -416,14 +416,18 @@ body {
 /* 균등 맞춤 켠 뒤 내용이 바뀐 상태(재정렬 필요) — 주의 환기용 주황 강조 */
 .btn-toggle-all.btn-toggle-stale { background: #FF9500; color: #fff; }
 .btn-toggle-all.btn-toggle-stale:hover { background: #FF9500; color: #fff; filter: brightness(.95); }
+/* '좌우 균등 맞춤'은 회색 유지 — 켜진(활성) 상태도 파란색 대신 진한 회색으로(파란색은 '한 번에 자동 맞춤' 전용).
+ * 단 '다시 맞추기'(stale) 주황 경고는 그대로 둠. */
+#btnBalance.btn-toggle-active:not(.btn-toggle-stale) { background: rgba(0,0,0,0.12); color: var(--text-main); }
+#btnBalance.btn-toggle-active:not(.btn-toggle-stale):hover { background: rgba(0,0,0,0.16); color: var(--text-main); filter: none; }
 /* 디자인 탭 하단 전폭 균등 맞춤 버튼 */
 .btn-balance-full {
     width: 100%; padding: 11px 14px; font-size: 12.5px; border-radius: var(--radius-md);
     background: rgba(0,0,0,0.05); color: var(--text-main); margin-top: 4px;
 }
 .btn-balance-full:hover { background: rgba(0,0,0,0.09); }
-/* 원클릭 '한 번에 자동 맞춤' — 강조(채움) 버튼 */
-.btn-auto-all { background: var(--primary); color: #fff; font-weight: 700; font-size: 13.5px; margin-top: 10px; }
+/* 원클릭 '한 번에 자동 맞춤' — 파란색 강조(주 버튼) */
+.btn-auto-all { margin-top: 10px; background: var(--primary); color: #fff; font-weight: 700; }
 .btn-auto-all:hover { background: var(--primary); color: #fff; filter: brightness(.95); }
 /* 고급 설정 접기/펼치기 */
 .adv-toggle {
@@ -466,6 +470,18 @@ body {
 #textScaleGroup.auto-locked .slider-input,
 #textScaleGroup.auto-locked .label-tip-input { opacity: .45; pointer-events: none; }
 .colsplit-hint { font-size: 11px; color: var(--text-tertiary); }
+/* 화면 하단 고정 경고 배너 — 아래쪽 항목 편집 중에도 잘림 경고가 항상 보이도록 */
+.floating-warn {
+    position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%);
+    max-width: min(640px, 92vw); z-index: 9999; pointer-events: none;
+    background: #FF3B30; color: #fff; font-size: 13px; font-weight: 600; line-height: 1.4;
+    padding: 11px 20px; border-radius: 999px; text-align: center;
+    box-shadow: 0 8px 28px rgba(255,59,48,0.4);
+    animation: floatingWarnIn .2s ease;
+}
+.floating-warn[hidden] { display: none; }
+@keyframes floatingWarnIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (max-width: 600px) { .floating-warn { bottom: 14px; font-size: 12px; padding: 9px 14px; } }
 
 /* ══════════════════════════════════════════
    섹션 타이틀 래퍼

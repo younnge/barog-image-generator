@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"
         integrity="sha512-Qlv6VSKh1gDKGoJbnyA5RMXYcvnpIqhO++MhIM2fStMcGT9i2T//tSwYFlcyoRRDcDZ+TYHpH8azBBCyhpSeqw=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <link rel="stylesheet" href="style.css?v=20260623n">
+    <link rel="stylesheet" href="style.css?v=20260623s">
 </head>
 <body>
     <div class="bg-blur">
@@ -191,7 +191,7 @@
                     </div>
                 </div>
 
-                <button class="btn-balance-full btn-auto-all" id="btnAutoAll" title="좌우 2단 균형 + 위·아래 끝 맞춤 + 글자 크기·헤더 높이를 한 번에 자동으로 맞춥니다. 이후 슬라이더로 미세 조정할 수 있어요.">✨ 한 번에 자동 맞춤</button>
+                <button class="btn-toggle-all btn-balance-full btn-auto-all" id="btnAutoAll" title="좌우 2단 균형 + 위·아래 끝 맞춤 + 글자 크기·헤더 높이를 한 번에 자동으로 맞춥니다. 이후 슬라이더로 미세 조정할 수 있어요.">✨ 한 번에 자동 맞춤</button>
 
                 <button class="adv-toggle" id="advToggle" aria-expanded="false" aria-controls="advPanel">
                     <span>고급 설정 (수동 조정)</span>
@@ -264,6 +264,9 @@
         </div>
     </div>
 
+    <!-- ===== 화면 고정 경고 배너 (편집 위치와 무관하게 항상 보임) ===== -->
+    <div id="floatingWarn" class="floating-warn" role="status" aria-live="polite" hidden></div>
+
     <!-- ===== 플로팅 리모컨 ===== -->
     <div class="remote-panel" id="remotePanel">
         <button class="rbtn" id="remoteUndo" title="실행취소 (Ctrl+Z)" aria-label="실행취소" disabled>
@@ -292,6 +295,6 @@
         <input type="file" id="loadFileInput" accept=".json" style="display:none">
     </div>
 
-    <script src="main.js?v=20260623n"></script>
+    <script src="main.js?v=20260623s"></script>
 </body>
 </html>

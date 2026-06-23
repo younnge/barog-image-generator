@@ -2088,6 +2088,7 @@ function generateImages() {
         previewContainer.innerHTML = `<div class="placeholder-text" id="placeholder"><p style="font-size:40px;margin-bottom:16px;">📄</p>A4 출력 이미지가 여기에 표시됩니다.<br><span style="font-size:13px;color:#ABB3BB;">섹션과 항목을 추가해 시작하세요</span></div>`;
         generatedImagesUrls = [];
         if (statusChip) { statusChip.textContent = ''; statusChip.className = 'status-chip'; }
+        setFloatingWarn('');
         return;
     }
 
@@ -2144,25 +2145,25 @@ function generateImages() {
                 previewContainer.appendChild(img);
             });
 
-            if (statusChip) {
-                if (overflow && autoFitOnePage && !fitOk) {
-                    // 자동 맞춤이 최소(70%)까지 줄여도 한 장에 안 들어감 → 내용 자체를 줄여야 함
-                    statusChip.textContent = '⚠ 최소 크기로도 한 장에 다 담기지 않습니다 — 항목 수를 줄이거나 좌우 2단으로 나누세요';
-                    statusChip.className = 'status-chip warn';
-                } else if (overflow) {
-                    statusChip.textContent = '⚠ 내용이 넘쳐 일부가 잘렸습니다 — 텍스트 크기 축소·컬럼 분리 권장';
-                    statusChip.className = 'status-chip warn';
-                } else if (headerTextDropped) {
-                    statusChip.textContent = '⚠ 헤더 높이가 0이라 제목·기간이 표시되지 않습니다';
-                    statusChip.className = 'status-chip warn';
-                } else {
-                    statusChip.textContent = `${pages.length}페이지 완료`;
-                    statusChip.className = 'status-chip done';
-                }
+            // 경고 메시지 1곳에서 계산 → 상단 상태칩 + 화면 고정 배너 동기화
+            let warnMsg = '';
+            if (overflow && autoFitOnePage && !fitOk) {
+                // 자동 맞춤이 최소(70%)까지 줄여도 한 장에 안 들어감 → 내용 자체를 줄여야 함
+                warnMsg = '⚠ 최소 크기로도 한 장에 다 담기지 않습니다 — 항목 수를 줄이거나 좌우 2단으로 나누세요';
+            } else if (overflow) {
+                warnMsg = '⚠ 내용이 넘쳐 일부가 잘렸습니다 — 텍스트 크기 축소·컬럼 분리 권장';
+            } else if (headerTextDropped) {
+                warnMsg = '⚠ 헤더 높이가 0이라 제목·기간이 표시되지 않습니다';
             }
+            if (statusChip) {
+                statusChip.textContent = warnMsg || `${pages.length}페이지 완료`;
+                statusChip.className = warnMsg ? 'status-chip warn' : 'status-chip done';
+            }
+            setFloatingWarn(warnMsg);   // 하단에서 편집 중에도 보이도록 화면 고정 배너
         } catch (err) {
             console.error('이미지 생성 실패:', err);
             if (statusChip) { statusChip.textContent = '생성 중 오류 발생'; statusChip.className = 'status-chip error'; }
+            setFloatingWarn('⚠ 생성 중 오류 발생');
         }
     });
 }
@@ -2171,6 +2172,15 @@ let _genTimer = null;
 function debouncedGenerateImages() {
     clearTimeout(_genTimer);
     _genTimer = setTimeout(generateImages, 300);
+}
+
+/* 화면 하단 고정 경고 배너 — 상단 미리보기 칩이 스크롤로 안 보일 때를 대비.
+ * 경고가 있을 때만 표시, 없으면 숨김. */
+function setFloatingWarn(msg) {
+    const el = document.getElementById('floatingWarn');
+    if (!el) return;
+    if (msg) { el.textContent = msg; el.hidden = false; }
+    else { el.hidden = true; el.textContent = ''; }
 }
 
 /* ============================================================
