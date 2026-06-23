@@ -6,6 +6,7 @@ let cachedBgImg = null;
 let isBackedUp = true;
 let activeColumnTab = 'all';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
+let balanceSnapshot = null;   // 균등 맞춤 켜기 직전 상태(DOM 순서·텍스트 크기) — 끌 때 원상복구용
 let undoHistory = [];
 let redoHistory = [];
 const MAX_UNDO = 100;
@@ -2451,16 +2452,48 @@ function toggleAllSections() {
     saveSnapshot();
 }
 
-/* '좌우 균등 맞춤' 토글: 켜면 섹션 DOM·구분선을 높이 균형대로 실제 재배치 + 간격 균등 분배 */
+/* 균등 맞춤 켜기 직전 상태를 저장해 두었다가 끌 때 그대로 되돌린다. */
+function captureBalanceSnapshot() {
+    const container = document.getElementById('itemsContainer');
+    const slider = document.getElementById('textScale');
+    balanceSnapshot = {
+        order: Array.from(container.children),   // 재배치 전 자식 노드 순서(노드 참조 유지)
+        textScale: slider ? slider.value : null
+    };
+}
+function restoreBalanceSnapshot() {
+    if (!balanceSnapshot) return;
+    const container = document.getElementById('itemsContainer');
+    const keep = new Set(balanceSnapshot.order);
+    // 켜질 때 새로 만들어진 노드(자동 생성된 컬럼 구분선 등)는 제거
+    Array.from(container.children).forEach(n => { if (!keep.has(n)) n.remove(); });
+    // 저장해 둔 원래 순서대로 다시 배치
+    balanceSnapshot.order.forEach(n => { if (n.isConnected) container.appendChild(n); });
+    // 텍스트 크기 슬라이더 복원
+    const slider = document.getElementById('textScale');
+    if (slider && balanceSnapshot.textScale != null) {
+        slider.value = balanceSnapshot.textScale;
+        const label = document.getElementById('textScaleLabel');
+        if (label) label.value = balanceSnapshot.textScale;
+        updateSliderBg(slider);
+    }
+    balanceSnapshot = null;
+}
+
+/* '좌우 균등 맞춤' 토글: 켜면 섹션 DOM·구분선을 높이 균형대로 실제 재배치 + 간격 균등 분배.
+ * 끄면 켜기 직전 상태(DOM 순서·텍스트 크기)로 원상복구. */
 function toggleBalanceLayout() {
     layoutBalanced = !layoutBalanced;
     if (layoutBalanced) {
+        captureBalanceSnapshot();      // 되돌리기용 원래 상태 저장
         reorderDomBalanced();          // 설정 패널의 섹션·구분선을 좌/우로 실제 정리
         autoFitTextScale();            // 적절한 전체 텍스트 크기 1회 자동 설정
-        refreshAccordionVisibility();  // 섹션 그룹/접힘 상태 갱신
-        refreshBookmarks();            // 북마크(목차) 패널도 새 좌/우 배치 반영
-        applyColumnTabFilter();        // 좌측/우측 이벤트 탭 필터 갱신
+    } else {
+        restoreBalanceSnapshot();      // 켜기 직전 배치·크기로 복원
     }
+    refreshAccordionVisibility();  // 섹션 그룹/접힘 상태 갱신
+    refreshBookmarks();            // 북마크(목차) 패널도 배치 반영
+    applyColumnTabFilter();        // 좌측/우측 이벤트 탭 필터 갱신
     updateBalanceBtn();
     generateImages();
     saveSnapshot();
