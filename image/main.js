@@ -4,7 +4,7 @@
 let generatedImagesUrls = [];
 let cachedBgImg = null;
 let isBackedUp = true;
-let activeColumnTab = 'all';
+let activeColumnTab = 'left';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
 let balanceBottomExact = false;  // 균등 맞춤 시 두 컬럼 하단을 bottomY에 정확히 일치(A토글) — 기본 OFF
 let autoFitOnePage = false;      // 한 장에 자동 맞춤: 매 렌더마다 한 페이지에 들어가는 최대 크기 자동 적용 — 기본 OFF
@@ -738,7 +738,7 @@ function refreshBookmarks() {
         list.classList.remove('bm-two-col');
         children.forEach(node => {
             if (node.classList.contains('section-title-wrapper')) {
-                list.appendChild(makeEntry(node, 'all'));
+                list.appendChild(makeEntry(node, 'left'));
             }
         });
     }

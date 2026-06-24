@@ -62,6 +62,44 @@
                     </div>
                 </div>
 
+                <div class="design-group">
+                    <div class="design-group-label">제목</div>
+                    <div class="item-name-wrapper">
+                        <textarea id="topText" class="btn-input auto-resize" rows="1" placeholder="예) 바로그 강남점 5월 이벤트"></textarea>
+                        <div class="format-toolbar">
+                            <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
+                            <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
+                            <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="design-2col">
+                    <div class="design-group">
+                        <div class="design-group-label">이벤트 기간</div>
+                        <div class="item-name-wrapper">
+                            <input type="text" id="periodText" class="btn-input" placeholder="예) 2026.05.01 - 2026.05.31" value="">
+                            <div class="format-toolbar">
+                                <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
+                                <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
+                                <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="design-group">
+                        <div class="design-group-label">기간 우측 텍스트</div>
+                        <div class="item-name-wrapper">
+                            <input type="text" id="periodNote" class="btn-input" placeholder="예) 부가세 별도" value="">
+                            <div class="format-toolbar">
+                                <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
+                                <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
+                                <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="design-2col">
                     <div class="design-group">
                         <div class="design-group-label">테마 색상</div>
@@ -128,44 +166,6 @@
                     </div>
                 </div>
 
-                <div class="design-group">
-                    <div class="design-group-label">제목</div>
-                    <div class="item-name-wrapper">
-                        <textarea id="topText" class="btn-input auto-resize" rows="1" placeholder="예) 바로그 강남점 5월 이벤트"></textarea>
-                        <div class="format-toolbar">
-                            <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
-                            <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
-                            <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="design-2col">
-                    <div class="design-group">
-                        <div class="design-group-label">이벤트 기간</div>
-                        <div class="item-name-wrapper">
-                            <input type="text" id="periodText" class="btn-input" placeholder="예) 2026.05.01 - 2026.05.31" value="">
-                            <div class="format-toolbar">
-                                <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
-                                <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
-                                <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="design-group">
-                        <div class="design-group-label">기간 우측 텍스트</div>
-                        <div class="item-name-wrapper">
-                            <input type="text" id="periodNote" class="btn-input" placeholder="예) 부가세 별도" value="">
-                            <div class="format-toolbar">
-                                <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
-                                <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
-                                <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="design-2col">
                     <div class="design-group">
                         <div class="label-with-tip">
@@ -222,8 +222,7 @@
                     </div>
                 </div>
                 <div class="column-tab-bar" id="columnTabBar" role="tablist" aria-label="컬럼 필터">
-                    <button class="col-tab col-tab-active" data-col="all" role="tab" aria-selected="true">전체</button>
-                    <button class="col-tab" data-col="left" role="tab" aria-selected="false">좌측 이벤트</button>
+                    <button class="col-tab col-tab-active" data-col="left" role="tab" aria-selected="true">좌측 이벤트</button>
                     <button class="col-tab" data-col="right" role="tab" aria-selected="false">우측 이벤트</button>
                 </div>
                 <div class="items-scroll">
