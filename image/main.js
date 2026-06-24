@@ -3383,17 +3383,5 @@ window.onload = () => {
     });
 
     markSaved();
-
-    // 리모컨 패널을 미리보기 카드 우측 끝에서 gap: 20px 위치에 고정
-    function updateRemotePanelPosition() {
-        const previewCard = document.querySelector('.preview-card');
-        const remotePanel = document.getElementById('remotePanel');
-        if (!previewCard || !remotePanel) return;
-        const rect = previewCard.getBoundingClientRect();
-        const gap = 20;
-        const right = window.innerWidth - rect.right - gap - remotePanel.offsetWidth;
-        remotePanel.style.right = Math.max(right, 8) + 'px';
-    }
-    updateRemotePanelPosition();
-    window.addEventListener('resize', updateRemotePanelPosition);
+    // 리모컨은 이제 컨테이너 4번째 그리드 컬럼(sticky)이라 별도 위치 보정 불필요
 };

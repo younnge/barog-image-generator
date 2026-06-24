@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"
         integrity="sha512-Qlv6VSKh1gDKGoJbnyA5RMXYcvnpIqhO++MhIM2fStMcGT9i2T//tSwYFlcyoRRDcDZ+TYHpH8azBBCyhpSeqw=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <link rel="stylesheet" href="style.css?v=20260623s">
+    <link rel="stylesheet" href="style.css?v=20260624a">
 </head>
 <body>
     <div class="bg-blur">
@@ -262,13 +262,9 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- ===== 화면 고정 경고 배너 (편집 위치와 무관하게 항상 보임) ===== -->
-    <div id="floatingWarn" class="floating-warn" role="status" aria-live="polite" hidden></div>
-
-    <!-- ===== 플로팅 리모컨 ===== -->
-    <div class="remote-panel" id="remotePanel">
+        <!-- ===== 리모컨 (그리드 4번째 컬럼 · 스크롤 따라 고정) ===== -->
+        <div class="remote-panel" id="remotePanel">
         <button class="rbtn" id="remoteUndo" title="실행취소 (Ctrl+Z)" aria-label="실행취소" disabled>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
         </button>
@@ -293,8 +289,12 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
         </button>
         <input type="file" id="loadFileInput" accept=".json" style="display:none">
+        </div>
     </div>
 
-    <script src="main.js?v=20260623s"></script>
+    <!-- ===== 화면 고정 경고 배너 (편집 위치와 무관하게 항상 보임) ===== -->
+    <div id="floatingWarn" class="floating-warn" role="status" aria-live="polite" hidden></div>
+
+    <script src="main.js?v=20260624a"></script>
 </body>
 </html>
