@@ -887,8 +887,8 @@ body {
 
 /* ── 플로팅 리모컨 ── */
 .remote-panel {
-    flex: 0 0 auto; align-self: flex-start;
-    position: sticky; top: 28px;
+    flex: 0 0 auto; align-self: flex-end;
+    position: sticky; bottom: 28px;
     display: flex; flex-direction: column; gap: 2px;
     background: rgba(250,250,252,0.88);
     border: 0.5px solid rgba(0,0,0,0.1);
