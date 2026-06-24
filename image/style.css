@@ -416,10 +416,8 @@ body {
 /* 균등 맞춤 켠 뒤 내용이 바뀐 상태(재정렬 필요) — 주의 환기용 주황 강조 */
 .btn-toggle-all.btn-toggle-stale { background: #FF9500; color: #fff; }
 .btn-toggle-all.btn-toggle-stale:hover { background: #FF9500; color: #fff; filter: brightness(.95); }
-/* '좌우 균등 맞춤'은 회색 유지 — 켜진(활성) 상태도 파란색 대신 진한 회색으로(파란색은 '한 번에 자동 맞춤' 전용).
- * 단 '다시 맞추기'(stale) 주황 경고는 그대로 둠. */
-#btnBalance.btn-toggle-active:not(.btn-toggle-stale) { background: rgba(0,0,0,0.12); color: var(--text-main); }
-#btnBalance.btn-toggle-active:not(.btn-toggle-stale):hover { background: rgba(0,0,0,0.16); color: var(--text-main); filter: none; }
+/* '좌우 균등 맞춤' 켜진(활성) 상태 — 파란색 강조('한 번에 자동 맞춤'과 동일).
+ * '다시 맞추기'(stale) 주황 경고는 위 규칙으로 그대로 유지. */
 /* 디자인 탭 하단 전폭 균등 맞춤 버튼 */
 .btn-balance-full {
     width: 100%; padding: 11px 14px; font-size: 12.5px; border-radius: var(--radius-md);

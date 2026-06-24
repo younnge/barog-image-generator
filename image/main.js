@@ -303,14 +303,14 @@ function undo() {
     if (undoHistory.length === 0) return;
     redoHistory.push(JSON.stringify(getSnapshot()));
     restoreSnapshot(undoHistory.pop());
-    debouncedGenerateImages();
+    renderImagesNow();   // 되돌리기는 즉시 반영(디바운스 없이)
     updateRemoteState();
 }
 function redo() {
     if (redoHistory.length === 0) return;
     undoHistory.push(JSON.stringify(getSnapshot()));
     restoreSnapshot(redoHistory.pop());
-    debouncedGenerateImages();
+    renderImagesNow();   // 다시실행도 즉시 반영
     updateRemoteState();
 }
 
@@ -2172,6 +2172,11 @@ let _genTimer = null;
 function debouncedGenerateImages() {
     clearTimeout(_genTimer);
     _genTimer = setTimeout(generateImages, 300);
+}
+/* 디바운스 대기 중인 렌더를 취소하고 즉시 그린다(되돌리기/다시실행 등 지연 없이 반영). */
+function renderImagesNow() {
+    clearTimeout(_genTimer);
+    generateImages();
 }
 
 /* 화면 하단 고정 경고 배너 — 상단 미리보기 칩이 스크롤로 안 보일 때를 대비.
