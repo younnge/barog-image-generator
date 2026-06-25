@@ -705,7 +705,7 @@ function refreshBookmarks() {
     const hasColBreak = children.some(n => n.classList.contains('column-break-wrapper'));
 
     function makeEntry(node, side) {
-        const title = node.querySelector('.section-title-input')?.value.trim() || '(제목 없음)';
+        const title = plainTextFromStyled(node.querySelector('.section-title-input')?.value || '').trim() || '(제목 없음)';
         const entry = document.createElement('div');
         const isActive = !node.classList.contains('collapsed');
         entry.className = 'bm-entry bm-section' + (isActive ? ' bm-active' : '');
@@ -1202,6 +1202,11 @@ function parseStyledText(text) {
     }
     if (cur) merged.push(cur);
     return merged;
+}
+
+/* 서식 DSL 기호(<>, {} 및 크기 토큰)를 제거한 순수 텍스트 — 북마크/목차 표시용 */
+function plainTextFromStyled(text) {
+    return parseStyledText(text).map(c => c.text).join('');
 }
 
 function getChunkFont(chunk, baseSize, isBold, fonts) {
