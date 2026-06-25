@@ -337,14 +337,24 @@ function applyColumnTabFilter() {
             child.style.display = activeColumnTab === 'all' ? '' : 'none';
             return;
         }
+        const isFull = child.dataset.fullWidth === 'true';
         let show = true;
         if (activeColumnTab === 'left') {
-            show = breakIdx === -1 || i < breakIdx;
+            // 전체폭 섹션은 위치와 무관하게 항상 좌측 탭에서 편집
+            show = isFull || breakIdx === -1 || i < breakIdx;
         } else if (activeColumnTab === 'right') {
-            show = breakIdx !== -1 && i > breakIdx;
+            // 전체폭 섹션은 우측 탭에서 숨김(좌측 탭 전용)
+            show = !isFull && breakIdx !== -1 && i > breakIdx;
         }
         child.style.display = show ? '' : 'none';
     });
+
+    // 우측 탭에서 숨겨진 전체폭 섹션이 있으면 안내 배너 표시
+    const fwHint = document.getElementById('fullWidthHint');
+    if (fwHint) {
+        const hasFull = children.some(n => n.dataset.fullWidth === 'true');
+        fwHint.style.display = (activeColumnTab === 'right' && hasFull) ? '' : 'none';
+    }
 
     document.querySelectorAll('.col-tab').forEach(btn => {
         const on = btn.dataset.col === activeColumnTab;
@@ -573,8 +583,8 @@ function addItemRow(itemData = {}) {
     return row;
 }
 
-function addColumnBreak(undoId = null) {
-    const container = document.getElementById('itemsContainer');
+/* 컬럼 구분 노드 생성(삽입 위치는 호출부에서 결정) */
+function createColumnBreakNode(undoId = null) {
     const wrapper = document.createElement('div');
     wrapper.className = 'column-break-wrapper';
     wrapper.setAttribute('data-undo-id', sanitizeId(undoId) || generateUniqueId('col'));
@@ -583,8 +593,12 @@ function addColumnBreak(undoId = null) {
         <div class="column-break-line">↔ 여기서 오른쪽 컬럼으로 분리 ↔</div>
         <button class="btn-remove js-del-colbreak" title="삭제" aria-label="컬럼 구분 삭제">${CLOSE_SVG}</button>
     `;
-    container.appendChild(wrapper);
     initDragAndDrop(wrapper);
+    return wrapper;
+}
+function addColumnBreak(undoId = null) {
+    const container = document.getElementById('itemsContainer');
+    container.appendChild(createColumnBreakNode(undoId));
     refreshAccordionVisibility();
     debouncedGenerateImages();
 }
@@ -722,6 +736,10 @@ function refreshBookmarks() {
         leftCol.className = 'bm-col';
         const rightCol = document.createElement('div');
         rightCol.className = 'bm-col';
+        // 전체폭 섹션은 컬럼에 넣지 않고 전체 너비로(좌측 탭 전용). 미리보기와 동일하게
+        // 컬럼 내용 앞에 나온 전체폭은 상단, 뒤에 나온 전체폭은 하단에 배치.
+        const leadFull = [], trailFull = [];
+        let seenCol = false;
         let currentCol = leftCol;
         let currentSide = 'left';
         children.forEach(node => {
@@ -729,11 +747,20 @@ function refreshBookmarks() {
                 currentCol = rightCol;
                 currentSide = 'right';
             } else if (node.classList.contains('section-title-wrapper')) {
-                currentCol.appendChild(makeEntry(node, currentSide));
+                if (node.dataset.fullWidth === 'true') {
+                    const en = makeEntry(node, 'left');
+                    en.classList.add('bm-full');
+                    (seenCol ? trailFull : leadFull).push(en);
+                } else {
+                    seenCol = true;
+                    currentCol.appendChild(makeEntry(node, currentSide));
+                }
             }
         });
+        leadFull.forEach(en => list.appendChild(en));    // 컬럼 내용 위(상단)
         list.appendChild(leftCol);
         list.appendChild(rightCol);
+        trailFull.forEach(en => list.appendChild(en));   // 컬럼 내용 아래(하단)
     } else {
         list.classList.remove('bm-two-col');
         children.forEach(node => {
@@ -746,6 +773,20 @@ function refreshBookmarks() {
 
 /* ===== 북마크 드래그로 이벤트(섹션) 순서 변경 — 상하(같은 컬럼)·좌우(컬럼 간) ===== */
 let bmDragSrc = null, bmDragMoved = false, bmSuppressClick = false, bmStartX = 0, bmStartY = 0;
+let bmGhost = null, bmGhostDX = 0, bmGhostDY = 0;   // 마우스를 따라오는 드래그 미리보기
+
+/* 드래그 중인 항목을 복제해 커서를 따라다니는 고스트 생성(시각적 피드백) */
+function createBmGhost(src, p) {
+    const r = src.getBoundingClientRect();
+    bmGhostDX = p.clientX - r.left;
+    bmGhostDY = p.clientY - r.top;
+    bmGhost = src.cloneNode(true);
+    bmGhost.className = 'bm-entry bm-ghost';
+    bmGhost.style.width = r.width + 'px';
+    bmGhost.style.left = r.left + 'px';
+    bmGhost.style.top = r.top + 'px';
+    document.body.appendChild(bmGhost);
+}
 
 function onBmDragStart(e) {
     bmDragSrc = e.currentTarget;
@@ -769,13 +810,20 @@ function onBmDragMove(e) {
         if (Math.hypot(p.clientX - bmStartX, p.clientY - bmStartY) < 5) return;  // 임계값: 클릭과 구분
         bmDragMoved = true;
         bmDragSrc.classList.add('bm-dragging');
+        createBmGhost(bmDragSrc, p);   // 커서 추종 미리보기 시작
     }
     if (e.cancelable) e.preventDefault();
 
+    if (bmGhost) {   // 고스트를 커서 위치로 이동
+        bmGhost.style.left = (p.clientX - bmGhostDX) + 'px';
+        bmGhost.style.top = (p.clientY - bmGhostDY) + 'px';
+    }
+
     const list = document.getElementById('bookmarkList');
-    // 대상 컬럼 결정 (2열이면 X로, 아니면 단일 리스트)
+    const isFull = bmDragSrc.classList.contains('bm-full');
+    // 대상 컬럼 결정 (2열이면 X로, 아니면 단일 리스트). 전체폭 항목은 상단 전체폭 영역에서만 이동.
     let targetCol = list;
-    if (list.classList.contains('bm-two-col')) {
+    if (list.classList.contains('bm-two-col') && !isFull) {
         const cols = Array.from(list.querySelectorAll('.bm-col'));
         targetCol = cols.reduce((best, col) => {
             const r = col.getBoundingClientRect();
@@ -784,14 +832,28 @@ function onBmDragMove(e) {
             return (!best || d < best.d) ? { col, d } : best;
         }, null).col;
     }
-    // 같은 컬럼 내 삽입 위치(Y 중점 기준)
-    const entries = Array.from(targetCol.querySelectorAll('.bm-entry')).filter(en => en !== bmDragSrc);
+    // 삽입 후보: 전체폭 항목은 다른 전체폭 항목끼리만, 일반 항목은 같은 컬럼 내에서만
+    const entries = isFull
+        ? Array.from(list.children).filter(en => en.classList.contains('bm-full') && en !== bmDragSrc)
+        : Array.from(targetCol.querySelectorAll('.bm-entry')).filter(en => en !== bmDragSrc);
     let before = null;
     for (const en of entries) {
         const r = en.getBoundingClientRect();
         if (p.clientY < r.top + r.height / 2) { before = en; break; }
     }
-    before ? targetCol.insertBefore(bmDragSrc, before) : targetCol.appendChild(bmDragSrc);
+    if (isFull) {
+        // 전체폭은 컬럼 묶음을 기준으로 위(상단)·아래(하단) 모두 이동 가능
+        const firstCol = list.querySelector('.bm-col');
+        if (before) {
+            list.insertBefore(bmDragSrc, before);
+        } else if (firstCol && p.clientY < firstCol.getBoundingClientRect().top) {
+            list.insertBefore(bmDragSrc, firstCol);   // 컬럼 위(상단)
+        } else {
+            list.appendChild(bmDragSrc);              // 컬럼 아래(하단)
+        }
+    } else {
+        before ? targetCol.insertBefore(bmDragSrc, before) : targetCol.appendChild(bmDragSrc);
+    }
 }
 
 function onBmDragEnd() {
@@ -801,6 +863,7 @@ function onBmDragEnd() {
     document.removeEventListener('touchend', onBmDragEnd);
     const moved = bmDragMoved;
     if (bmDragSrc) bmDragSrc.classList.remove('bm-dragging');
+    if (bmGhost) { bmGhost.remove(); bmGhost = null; }   // 고스트 제거
     bmDragSrc = null; bmDragMoved = false;
     if (moved) {
         bmSuppressClick = true;        // 바로 뒤따르는 click(내비게이션) 무시
@@ -817,21 +880,28 @@ function applyBookmarkOrderToDom() {
     const blockOf = new Map(blocks.map(b => [b.wrapper, b]));
     const twoCol = list.classList.contains('bm-two-col');
 
-    let leftNodes = [], rightNodes = [];
+    let leadFullNodes = [], trailFullNodes = [], leftNodes = [], rightNodes = [];
     if (twoCol) {
+        // 전체폭 섹션은 컬럼 밖에 있음 — 컬럼(.bm-col) 기준 앞/뒤로 나눠 상·하단 위치 보존
+        const firstColIdx = Array.from(list.children).findIndex(n => n.classList.contains('bm-col'));
+        Array.from(list.children).forEach((n, i) => {
+            if (!n.classList.contains('bm-full')) return;
+            (i < firstColIdx ? leadFullNodes : trailFullNodes).push(n._sectionNode);
+        });
         const cols = list.querySelectorAll('.bm-col');
         leftNodes = Array.from(cols[0]?.querySelectorAll('.bm-entry') || []).map(en => en._sectionNode);
         rightNodes = Array.from(cols[1]?.querySelectorAll('.bm-entry') || []).map(en => en._sectionNode);
     } else {
         leftNodes = Array.from(list.querySelectorAll('.bm-entry')).map(en => en._sectionNode);
     }
-    const ordered = new Set([...leftNodes, ...rightNodes]);
+    const ordered = new Set([...leadFullNodes, ...trailFullNodes, ...leftNodes, ...rightNodes]);
     // 북마크에 없는 블록(헤더없는 항목 등)은 상단 유지
     const leadBlocks = blocks.filter(b => !ordered.has(b.wrapper));
 
     const order = [];
     const pushBlock = b => { if (!b) return; if (b.wrapper) order.push(b.wrapper); order.push(...b.items); };
     leadBlocks.forEach(pushBlock);
+    leadFullNodes.forEach(n => pushBlock(blockOf.get(n)));   // 컬럼 앞(상단) 전체폭
     leftNodes.forEach(n => pushBlock(blockOf.get(n)));
     if (twoCol) {
         const breaks = Array.from(container.querySelectorAll('.column-break-wrapper'));
@@ -841,6 +911,7 @@ function applyBookmarkOrderToDom() {
         order.push(brk);
         rightNodes.forEach(n => pushBlock(blockOf.get(n)));
     }
+    trailFullNodes.forEach(n => pushBlock(blockOf.get(n)));  // 컬럼 뒤(하단) 전체폭
     order.forEach(n => container.appendChild(n));
 
     refreshAccordionVisibility();
@@ -936,16 +1007,33 @@ function updateColSplitHint() {
 /* ============================================================
  * 드래그 앤 드롭
  * ============================================================ */
-let dragSrc = null;
+let dragSrc = null, dragGroup = [];   // 제목 드래그 시 함께 움직일 하위 항목들
 function initDragAndDrop(el) {
     el.addEventListener('mousedown', onDragMouseDown);
     el.addEventListener('touchstart', onDragTouchStart, { passive: false });
 }
+/* 제목 래퍼에 딸린 하위 항목(다음 형제 item-row들, 다음 제목·컬럼구분 전까지) 수집 */
+function sectionItemsOf(titleWrapper) {
+    const items = [];
+    let n = titleWrapper.nextElementSibling;
+    while (n && n.classList.contains('item-row')) { items.push(n); n = n.nextElementSibling; }
+    return items;
+}
+function beginDrag(el) {
+    dragSrc = el;
+    dragSrc.classList.add('dragging');
+    // 제목을 끌면 그 섹션 항목까지 한 덩어리로 이동(항목·컬럼구분 드래그는 단독)
+    dragGroup = dragSrc.classList.contains('section-title-wrapper') ? sectionItemsOf(dragSrc) : [];
+    dragGroup.forEach(it => it.classList.add('dragging'));
+}
+function endDrag() {
+    [dragSrc, ...dragGroup].forEach(el => el && el.classList.remove('dragging'));
+    dragSrc = null; dragGroup = [];
+}
 function onDragMouseDown(e) {
     if (!e.target.closest('.drag-handle')) return;
     e.preventDefault();
-    dragSrc = this;
-    dragSrc.classList.add('dragging');
+    beginDrag(this);
     document.addEventListener('mousemove', onDragMouseMove);
     document.addEventListener('mouseup', onDragMouseUp);
 }
@@ -957,9 +1045,11 @@ function onDragMouseMove(e) {
 function placeDraggedItem(clientY) {
     const container = document.getElementById('itemsContainer');
     const breakEl = container.querySelector('.column-break-wrapper');
-    // 숨겨진 항목(다른 컬럼)은 후보에서 제외 — 보이는 항목만으로 삽입 지점 판단
+    const block = [dragSrc, ...dragGroup];            // 함께 움직일 덩어리(제목+항목)
+    const blockSet = new Set(block);
+    // 드래그 중인 덩어리·숨겨진 항목(다른 컬럼)은 후보에서 제외 — 보이는 항목만으로 삽입 지점 판단
     const els = Array.from(container.children).filter(c =>
-        c !== dragSrc && !c.classList.contains('items-empty-hint') && c.style.display !== 'none');
+        !blockSet.has(c) && !c.classList.contains('items-empty-hint') && c.style.display !== 'none');
     let insertBefore = null;
     for (const el of els) {
         const rect = el.getBoundingClientRect();
@@ -967,12 +1057,12 @@ function placeDraggedItem(clientY) {
     }
     // 맨 아래로 드롭 시: 좌측 탭에서는 컬럼 구분선 앞까지만 (우측 컬럼 침범 방지)
     if (!insertBefore && activeColumnTab === 'left' && breakEl) insertBefore = breakEl;
-    insertBefore ? container.insertBefore(dragSrc, insertBefore) : container.appendChild(dragSrc);
+    // 덩어리를 순서대로 같은 기준 위치에 삽입(제목 → 항목들 순서 유지)
+    block.forEach(b => insertBefore ? container.insertBefore(b, insertBefore) : container.appendChild(b));
 }
 function onDragMouseUp() {
     if (!dragSrc) return;
-    dragSrc.classList.remove('dragging');
-    dragSrc = null;
+    endDrag();
     document.removeEventListener('mousemove', onDragMouseMove);
     document.removeEventListener('mouseup', onDragMouseUp);
     refreshAccordionVisibility();
@@ -983,8 +1073,7 @@ function onDragMouseUp() {
 function onDragTouchStart(e) {
     if (!e.target.closest('.drag-handle')) return;
     e.preventDefault();
-    dragSrc = this;
-    dragSrc.classList.add('dragging');
+    beginDrag(this);
     document.addEventListener('touchmove', onDragTouchMove, { passive: false });
     document.addEventListener('touchend', onDragTouchEnd);
 }
@@ -995,8 +1084,7 @@ function onDragTouchMove(e) {
 }
 function onDragTouchEnd() {
     if (!dragSrc) return;
-    dragSrc.classList.remove('dragging');
-    dragSrc = null;
+    endDrag();
     document.removeEventListener('touchmove', onDragTouchMove);
     document.removeEventListener('touchend', onDragTouchEnd);
     refreshAccordionVisibility();
@@ -1832,13 +1920,18 @@ function parseDomToPages() {
     return pages.filter(p => p.rows.length > 0);
 }
 
-function autoBalancePage(page) {
-    page.rows.forEach(row => {
-        if (row.type !== 'split' || row.right.length > 0 || row.left.length < 2) return;
-        const mid = Math.ceil(row.left.length / 2);
-        row.right = row.left.slice(mid);
-        row.left = row.left.slice(0, mid);
-    });
+/* 컬럼 구분이 없어 우측 컬럼이 빈 split 행은 좌측 섹션들을 전체폭 1열로 펼친다.
+ * (명시적 컬럼 구분이 있을 때만 2열 — '컬럼 구분 없으면 1열 전체 너비' 규칙) */
+function expandEmptyRightToFull(page) {
+    const rows = [];
+    for (const row of page.rows) {
+        if (row.type === 'split' && row.right.length === 0) {
+            row.left.forEach(sec => rows.push({ type: 'full', section: sec }));
+        } else {
+            rows.push(row);
+        }
+    }
+    page.rows = rows;
 }
 
 /* 높이 배열을 좌/우 두 그룹으로 나눠 합 차이를 최소화하는 최적 분할(부분합 DP).
@@ -2079,7 +2172,7 @@ function generateImages() {
             if (row.type === 'split' && row.right.length === 0) balanceRow(row);
         }));
     } else {
-        pages.forEach(autoBalancePage);
+        pages.forEach(expandEmptyRightToFull);
     }
     const previewContainer = document.getElementById('previewContainer');
     const statusChip = document.getElementById('statusChip');
@@ -3175,6 +3268,8 @@ window.onload = () => {
                 wrapper.dataset.fullWidth = isFull ? 'true' : 'false';
                 wrapper.querySelector('.js-layout-split').classList.toggle('layout-btn-active', !isFull);
                 wrapper.querySelector('.js-layout-full').classList.toggle('layout-btn-active', isFull);
+                applyColumnTabFilter();   // 전체폭 전환 시 좌측 탭 전용 규칙·안내 배너 즉시 반영
+                refreshBookmarks();       // 속성 변경은 MutationObserver가 못 잡으므로 북마크 즉시 갱신
                 saveSnapshot(); debouncedGenerateImages();
             }
         }
