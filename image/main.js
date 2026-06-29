@@ -1314,6 +1314,10 @@ const ITEM_LINE_HEIGHT = 1.2;
  * (자동 맞춤이 텍스트를 줄일 때 행도 따라 줄어 한 장에 더 잘 들어감).
  * 기본 numSize 35 × 1.25 = 43.75 ≈ 44px (기존 고정값과 동일). */
 const MIN_ROW_H_RATIO = 1.25;
+/* 가격 줄(티어) 세로 메트릭 — 글자 크기(numSize)에 비례시켜 글씨를 키워도 줄/라벨이 겹치지 않게 함.
+ * numSize 35 기준: 슬롯 높이 35, 줄 간격 -3(겹침)와 동일. */
+function priceTierH(numSize) { return numSize; }
+function priceRowGap(numSize) { return Math.round(numSize * -3 / 35); }
 /* 비고 텍스트와 윗 내용 사이 간격(스택 모드). 작을수록 비고가 위 내용에 붙음 */
 const NOTE_TOP_GAP = 4;
 /* 가격을 이름 우측에 나란히 둘지(false) 아래로 내릴지(스택) 판단용.
@@ -1333,7 +1337,7 @@ function nameBlockHeight(lineHeights, f) {
  * item.priceLayout 이 'side'/'stack' 이면 사용자가 고정한 값을 그대로 따름(가드 무시).
  * 미설정이면 두 레이아웃 본문 높이를 비교해 자동 선택(이름 최소폭 가드 + 더 낮은 쪽). */
 function computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize) {
-    const PAD_X = 18, PAD_Y = 12, PRICE_TIER_H = 35, PRICE_ROW_GAP = 6, PRICE_GAP = 1;
+    const PAD_X = 18, PAD_Y = 12, PRICE_TIER_H = priceTierH(numSize), PRICE_ROW_GAP = priceRowGap(numSize), PRICE_GAP = 1;
     const innerW = colW - PAD_X * 2;
     const getLineH = line => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
     const blockH = lines => nameBlockHeight(lines.map(getLineH), ITEM_LINE_HEIGHT);
@@ -1386,7 +1390,7 @@ function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35, ro
     const L = computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize);
     const getLineH = line => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
     const firstLineH = L.nameLines[0] ? getLineH(L.nameLines[0]) : NAME_SIZE;
-    const PRICE_TIER_H = 35, PRICE_GAP = 1;
+    const PRICE_TIER_H = priceTierH(numSize), PRICE_GAP = 1;
     let rowH, priceCenterOff, nameStartOff;
     if (L.isStacked) {
         rowH = PAD_Y + Math.ceil(L.nameBlockH) + PRICE_GAP + L.priceTotalH + (noteH ? NOTE_TOP_GAP : PAD_Y) + noteH;
@@ -1791,8 +1795,8 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
     const { tiers, isStacked, nameLines, nameBlockH, tierRows, priceTotalH } = L;
     const lineHeights = nameLines.map(getLineH);
     const hasNote = !!item.note;
-    const PRICE_TIER_H = 35;
-    const PRICE_ROW_GAP = 6;
+    const PRICE_TIER_H = priceTierH(numSize);
+    const PRICE_ROW_GAP = priceRowGap(numSize);
     const PRICE_GAP = 1;
     const priceCenterY = startY + geo.priceCenterOff;
     const nameStartY = startY + geo.nameStartOff;
