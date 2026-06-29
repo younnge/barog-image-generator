@@ -478,6 +478,11 @@ body {
 /* 한 장 자동 맞춤 ON: 수동 크기 슬라이더 잠금 시각화 */
 #textScaleGroup.auto-locked .slider-input,
 #textScaleGroup.auto-locked .label-tip-input { opacity: .45; pointer-events: none; }
+/* 균등/자동 맞춤 ON: 섹션 간격이 자동 분배되므로 수동 슬라이더 잠금 시각화 */
+#sectionGapGroup.auto-locked .slider-input,
+#sectionGapGroup.auto-locked .label-tip-input { opacity: .45; pointer-events: none; }
+.gap-auto-hint { display: none; font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+#sectionGapGroup.auto-locked .gap-auto-hint { display: block; }
 .colsplit-hint { font-size: 11px; color: var(--text-tertiary); }
 /* 화면 하단 고정 경고 배너 — 아래쪽 항목 편집 중에도 잘림 경고가 항상 보이도록 */
 .floating-warn {

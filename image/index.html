@@ -191,6 +191,15 @@
                     </div>
                 </div>
 
+                <div class="design-group" id="sectionGapGroup">
+                    <div class="label-with-tip">
+                        <span class="label-text">섹션 간격</span>
+                        <span class="label-tip-wrap"><input type="number" id="sectionGapLabel" class="label-tip-input" min="0" max="60" step="1" value="15"><span class="label-tip-unit">px</span></span>
+                    </div>
+                    <input type="range" id="sectionGap" min="0" max="60" value="15" step="1" class="slider-input">
+                    <span class="gap-auto-hint" id="sectionGapHint">자동 맞춤이 켜져 있어 간격이 자동 분배됩니다 — 끄면 직접 조절할 수 있어요</span>
+                </div>
+
                 <button class="btn-toggle-all btn-balance-full btn-auto-all" id="btnAutoAll" title="좌우 2단 균형 + 위·아래 끝 맞춤 + 글자 크기·헤더 높이를 한 번에 자동으로 맞춥니다. 이후 슬라이더로 미세 조정할 수 있어요.">✨ 한 번에 자동 맞춤</button>
 
                 <button class="adv-toggle" id="advToggle" aria-expanded="false" aria-controls="advPanel">
