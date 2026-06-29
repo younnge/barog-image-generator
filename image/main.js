@@ -1318,6 +1318,10 @@ const MIN_ROW_H_RATIO = 1.25;
  * numSize 35 기준: 슬롯 높이 35, 줄 간격 -3(겹침)와 동일. */
 function priceTierH(numSize) { return numSize; }
 function priceRowGap(numSize) { return Math.round(numSize * -3 / 35); }
+/* 아래로(스택) 모드의 상하 여백 = 나란히 모드의 실제 보이는 여백과 동일.
+ * 나란히는 행 높이 numSize×1.25 안에 numSize 가격 숫자를 중앙 배치 → 위아래 (numSize×0.25)/2 만큼 보임.
+ * 스택 모드 상/하 패딩을 이 값으로 맞춰 두 모드의 보이는 여백을 일치시킴(numSize 35 → 약 4px). */
+function stackPadY(numSize) { return Math.round(numSize * (MIN_ROW_H_RATIO - 1) / 2); }
 /* 비고 텍스트와 윗 내용 사이 간격(스택 모드). 작을수록 비고가 위 내용에 붙음 */
 const NOTE_TOP_GAP = 4;
 /* 가격을 이름 우측에 나란히 둘지(false) 아래로 내릴지(스택) 판단용.
@@ -1393,15 +1397,17 @@ function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35, ro
     const PRICE_TIER_H = priceTierH(numSize), PRICE_GAP = 1;
     let rowH, priceCenterOff, nameStartOff;
     if (L.isStacked) {
-        rowH = PAD_Y + Math.ceil(L.nameBlockH) + PRICE_GAP + L.priceTotalH + (noteH ? NOTE_TOP_GAP : PAD_Y) + noteH;
-        priceCenterOff = PAD_Y + Math.ceil(L.nameBlockH) + PRICE_GAP + PRICE_TIER_H / 2;
-        nameStartOff = PAD_Y + firstLineH / 2;
+        const SPAD = stackPadY(numSize);   // 나란히 모드와 동일한 보이는 상하 여백
+        rowH = SPAD + Math.ceil(L.nameBlockH) + PRICE_GAP + L.priceTotalH + (noteH ? NOTE_TOP_GAP : SPAD) + noteH;
+        priceCenterOff = SPAD + Math.ceil(L.nameBlockH) + PRICE_GAP + PRICE_TIER_H / 2;
+        nameStartOff = SPAD + firstLineH / 2;
         // 다열 행에서 더 큰 행 높이로 정렬: 스택형은 상단 기준 유지(아래 여백만 늘어남)
         if (rowHOverride != null && rowHOverride > rowH) rowH = rowHOverride;
     } else {
         // 나란히. 세로 티어면 가격 블록 높이도 내용 높이에 포함(이름·가격 중 큰 쪽)
+        const SPAD = stackPadY(numSize);   // 아래로 모드와 동일한 좁은 상하 여백
         const contentH = L.sideVerticalTiers ? Math.max(Math.ceil(L.nameBlockH), L.priceTotalH) : Math.ceil(L.nameBlockH);
-        rowH = Math.max(contentH + PAD_Y * 2 + noteH, Math.round(numSize * MIN_ROW_H_RATIO));
+        rowH = Math.max(contentH + SPAD * 2 + noteH, Math.round(numSize * MIN_ROW_H_RATIO));
         if (rowHOverride != null && rowHOverride > rowH) rowH = rowHOverride;
         const priceAreaH = rowH - noteH;
         // 나란히(가격이 이름 옆): 이름은 세로 중앙 정렬. 가격은 1개면 중앙, 2개 이상이면 drawItemRow가 하단 정렬.
@@ -1834,16 +1840,17 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
 
     // 가격 티어
     const priceRightX = x + colW - PAD_X;
-    const priceBottom = startY + (rowH - noteH) - PAD_Y;   // 하단 정렬 기준선
+    const botPad = stackPadY(numSize);   // 두 모드 공통 좁은 상하 여백
+    const priceBottom = startY + (rowH - noteH) - botPad;   // 하단 정렬 기준선
     // 같은 행 다중가격 블록(하단 정렬)의 세로 중앙. peer 없으면 행 중앙 → 단일 금액을 여기에 맞춤.
     const peerCenterY = peerPriceH > 0 ? priceBottom - peerPriceH / 2 : (startY + (rowH - noteH) / 2);
     if (L.sideVerticalTiers && tierRows.length > 0) {
         // 나란히 세로 티어(2개+): 하단 정렬·우측 정렬 → 칸끼리 마지막 가격 줄이 바닥에 맞음
-        const priceTopY = Math.max(startY + PAD_Y, priceBottom - priceTotalH);
+        const priceTopY = Math.max(startY + botPad, priceBottom - priceTotalH);
         drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP, labelBoxColor);
     } else if (isStacked && tierRows.length > 0) {
         // 아래로 모드. 다열: 가격 2개+ 하단 정렬, 단일 금액은 타 항목 가격 블록 중앙에 맞춤. 1열은 이름 바로 아래.
-        const belowName = startY + PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP;
+        const belowName = startY + botPad + Math.ceil(nameBlockH) + PRICE_GAP;
         let priceTopY = belowName;
         if (itemColCount(item) >= 2) {
             if (tiers.length >= 2) priceTopY = Math.max(belowName, priceBottom - priceTotalH);            // 가격 2개+ → 하단 정렬
