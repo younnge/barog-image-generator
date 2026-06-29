@@ -641,6 +641,23 @@ body {
 .btn-action-text:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
 .btn-action-text.btn-action-active { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
 
+/* 항목 가로 칸(전체폭/2열/3열) 세그먼트 컨트롤 */
+.item-cols-seg {
+    display: inline-flex; flex-shrink: 0; margin-top: 4px;
+    border: 0.5px solid rgba(0,0,0,0.10); border-radius: 6px; overflow: hidden;
+    background: rgba(0,0,0,0.02);
+}
+.item-col-btn {
+    height: 22px; width: 24px; padding: 0; border: 0;
+    border-left: 0.5px solid rgba(0,0,0,0.10);
+    background: transparent; color: var(--text-muted);
+    font-size: 12px; line-height: 22px; cursor: pointer;
+    font-family: inherit; transition: all .15s ease;
+}
+.item-col-btn:first-child { border-left: 0; }
+.item-col-btn:hover { color: var(--primary); background: var(--primary-light); }
+.item-col-btn.item-col-active { background: var(--primary); color: #fff; }
+
 .item-prices-row:not(.hidden) {
     display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
     padding: 4px 8px 6px 36px;
