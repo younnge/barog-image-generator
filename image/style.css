@@ -653,7 +653,9 @@ body {
     background: transparent; color: var(--text-muted);
     font-size: 12px; line-height: 22px; cursor: pointer;
     font-family: inherit; transition: all .15s ease;
+    display: inline-flex; align-items: center; justify-content: center;
 }
+.item-col-btn svg { display: block; }
 .item-col-btn:first-child { border-left: 0; }
 .item-col-btn:hover { color: var(--primary); background: var(--primary-light); }
 .item-col-btn.item-col-active { background: var(--primary); color: #fff; }

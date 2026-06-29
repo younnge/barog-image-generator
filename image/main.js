@@ -419,6 +419,15 @@ const CLOSE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14
 const COPY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
 const OPTS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>`;
 const EXPAND_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+/* 항목 가로 칸 세그먼트 아이콘 — 칸이 n개로 나뉜 모습(세로 칸 1·2·3개)을 그려 직관적으로 표시 */
+function colSegIcon(n) {
+    const rects = {
+        1: '<rect x=".5" y=".5" width="14" height="10" rx="1.5"/>',
+        2: '<rect x=".5" y=".5" width="6.5" height="10" rx="1.5"/><rect x="8" y=".5" width="6.5" height="10" rx="1.5"/>',
+        3: '<rect x=".5" y=".5" width="4" height="10" rx="1.5"/><rect x="5.5" y=".5" width="4" height="10" rx="1.5"/><rect x="10.5" y=".5" width="4" height="10" rx="1.5"/>'
+    }[n];
+    return `<svg width="15" height="11" viewBox="0 0 15 11" fill="currentColor" aria-hidden="true">${rects}</svg>`;
+}
 
 const BUILTIN_PRESETS = [];
 
@@ -562,9 +571,9 @@ function addItemRow(itemData = {}) {
                 </div>
             </div>
             <div class="item-cols-seg" title="이 항목이 섹션 안에서 차지하는 가로 칸 (같은 칸끼리 한 줄에 모임)">
-                <button class="item-col-btn js-itemcol${cols === 1 ? ' item-col-active' : ''}" data-cols="1" title="전체폭">▭</button>
-                <button class="item-col-btn js-itemcol${cols === 2 ? ' item-col-active' : ''}" data-cols="2" title="2열">▥</button>
-                <button class="item-col-btn js-itemcol${cols === 3 ? ' item-col-active' : ''}" data-cols="3" title="3열">▤</button>
+                <button class="item-col-btn js-itemcol${cols === 1 ? ' item-col-active' : ''}" data-cols="1" title="전체폭">${colSegIcon(1)}</button>
+                <button class="item-col-btn js-itemcol${cols === 2 ? ' item-col-active' : ''}" data-cols="2" title="2열">${colSegIcon(2)}</button>
+                <button class="item-col-btn js-itemcol${cols === 3 ? ' item-col-active' : ''}" data-cols="3" title="3열">${colSegIcon(3)}</button>
             </div>
             <div class="item-cols-seg item-pl-seg" title="가격 배치: 나란히(이름 옆 한 줄) / 아래로(이름 아래)">
                 <button class="item-col-btn js-itempl${pl === 'side' ? ' item-col-active' : ''}" data-pl="side" title="가격을 이름 옆에 나란히">↔</button>
@@ -1347,9 +1356,14 @@ function computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize) {
     if (force === 'stack') {
         return { tiers, isStacked: true, nameLines: fullLines, nameBlockH: blockH(fullLines), tierRows, priceTotalH };
     }
-    // 나란히. 2·3열 좁은 칸(cols>=2)에 가격이 2개 이상이면 가격을 세로로 쌓는다(한 줄에 한 티어, 우측 정렬).
+    // 나란히. 2·3열 좁은 칸(cols>=2)에 가격이 2개 이상이면 세로로 쌓고 하단 정렬(한 줄에 한 티어, 우측 정렬).
+    // 가격 1개짜리는 쌓을 게 없으니 기존 가로 나란히(세로 중앙) 유지 → 불필요한 여백 방지.
     if (itemColCount(item) >= 2 && tiers.length >= 2) {
-        const tierW = Math.max(...tiers.map(t => measureSingleTierWidth(ctx, t, numSize, fonts)));   // 세로 쌓기 → 가장 넓은 한 티어 폭만 차지
+        // 단위박스 우측 통일을 반영한 블록 폭 = (가장 넓은 단위박스) + 간격 + (가장 긴 금액). 라벨 없으면 단일 티어 최대폭.
+        const allLabeled = tiers.every(t => t.label);
+        const tierW = allLabeled
+            ? Math.max(...tiers.map(t => measureChipWidth(ctx, t.label, numSize, fonts))) + 10 + Math.max(...tiers.map(t => measurePriceTokensWidth(ctx, t.price, numSize, fonts)))
+            : Math.max(...tiers.map(t => measureSingleTierWidth(ctx, t, numSize, fonts)));
         const sideNameW = Math.max(innerW - tierW - STACK_SIDE_GAP, Math.floor(innerW * 0.25));
         const sideLines = wrapStyledText(ctx, item.itemName, Math.floor(sideNameW), NAME_SIZE, false, fonts);
         const vTierRows = tiers.map(t => [t]);                                                      // 한 티어 = 한 줄
@@ -1384,9 +1398,9 @@ function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35, ro
         // 나란히. 세로 티어면 가격 블록 높이도 내용 높이에 포함(이름·가격 중 큰 쪽)
         const contentH = L.sideVerticalTiers ? Math.max(Math.ceil(L.nameBlockH), L.priceTotalH) : Math.ceil(L.nameBlockH);
         rowH = Math.max(contentH + PAD_Y * 2 + noteH, Math.round(numSize * MIN_ROW_H_RATIO));
-        // 다열 행에서 더 큰 행 높이로 정렬: 나란히형은 늘어난 높이에 맞춰 세로 가운데 재정렬
         if (rowHOverride != null && rowHOverride > rowH) rowH = rowHOverride;
         const priceAreaH = rowH - noteH;
+        // 나란히(가격이 이름 옆): 이름은 세로 중앙 정렬. 가격은 1개면 중앙, 2개 이상이면 drawItemRow가 하단 정렬.
         priceCenterOff = priceAreaH / 2;
         nameStartOff = priceAreaH / 2 - (L.nameBlockH - firstLineH) / 2;
     }
@@ -1705,12 +1719,14 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
         const nextSub = (r + 1 < itemRows.length) && !!itemRows[r + 1].items[0]?.isSublabel;
         const isLastRow = r === itemRows.length - 1;
         // 행 높이 = 그룹 내 항목들의 자연 높이 최대값(각자 칸 폭 기준)
-        let rowH = 0;
-        grp.items.forEach((it, c) => { rowH = Math.max(rowH, itemRowGeometry(ctx, it, widths[c], fonts, bs, ns).rowH); });
+        const geos = grp.items.map((it, c) => itemRowGeometry(ctx, it, widths[c], fonts, bs, ns));
+        const rowH = Math.max(0, ...geos.map(g => g.rowH));
+        // 같은 행에서 가격 2개 이상 항목들의 가격 블록 높이 최대값(하단 정렬됨) → 단일 금액 항목을 이 블록 중앙에 맞추기 위해 전달
+        const peerPriceH = Math.max(0, ...geos.filter(g => g.L && g.L.tiers && g.L.tiers.length >= 2).map(g => g.L.priceTotalH));
         // 각 칸 그리기(행 높이로 정렬, 자체 구분선은 그리지 않음 → 행 단위로 아래에서 처리)
         let cx = x;
         for (let c = 0; c < grp.items.length; c++) {
-            drawItemRow(ctx, grp.items[c], cx, y, widths[c], themeColor, numColor, '#ffffff', fonts, false, bs, ns, labelBoxColor, rowH, false);
+            drawItemRow(ctx, grp.items[c], cx, y, widths[c], themeColor, numColor, '#ffffff', fonts, false, bs, ns, labelBoxColor, rowH, false, peerPriceH);
             cx += widths[c];
         }
         // 칸 사이 세로 구분선
@@ -1741,7 +1757,7 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
     return y;
 }
 
-function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35, labelBoxColor = '#000000', rowHOverride = null, drawBottomDivider = true) {
+function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35, labelBoxColor = '#000000', rowHOverride = null, drawBottomDivider = true, peerPriceH = 0) {
     const PAD_X = 18, PAD_Y = 12;
     const NAME_SIZE = bodySize, PRICE_SIZE = 28, NOTE_SIZE = Math.round(bodySize * 0.85);  // 비고 (본문 크기 연동)
     const getLineH = (line) => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
@@ -1814,16 +1830,27 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
 
     // 가격 티어
     const priceRightX = x + colW - PAD_X;
+    const priceBottom = startY + (rowH - noteH) - PAD_Y;   // 하단 정렬 기준선
+    // 같은 행 다중가격 블록(하단 정렬)의 세로 중앙. peer 없으면 행 중앙 → 단일 금액을 여기에 맞춤.
+    const peerCenterY = peerPriceH > 0 ? priceBottom - peerPriceH / 2 : (startY + (rowH - noteH) / 2);
     if (L.sideVerticalTiers && tierRows.length > 0) {
-        // 나란히 세로 티어: 가격 블록(한 줄에 한 티어)을 행 세로 중앙에 우측 정렬 배치
-        const priceAreaH = rowH - noteH;
-        const priceTopY = startY + Math.max(PAD_Y, (priceAreaH - priceTotalH) / 2);
+        // 나란히 세로 티어(2개+): 하단 정렬·우측 정렬 → 칸끼리 마지막 가격 줄이 바닥에 맞음
+        const priceTopY = Math.max(startY + PAD_Y, priceBottom - priceTotalH);
         drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP, labelBoxColor);
     } else if (isStacked && tierRows.length > 0) {
-        const priceTopY = startY + PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP;
+        // 아래로 모드. 다열: 가격 2개+ 하단 정렬, 단일 금액은 타 항목 가격 블록 중앙에 맞춤. 1열은 이름 바로 아래.
+        const belowName = startY + PAD_Y + Math.ceil(nameBlockH) + PRICE_GAP;
+        let priceTopY = belowName;
+        if (itemColCount(item) >= 2) {
+            if (tiers.length >= 2) priceTopY = Math.max(belowName, priceBottom - priceTotalH);            // 가격 2개+ → 하단 정렬
+            else if (peerPriceH > 0) priceTopY = Math.max(belowName, peerCenterY - priceTotalH / 2);      // 단일 + 2가격 peer 있음 → peer 블록 중앙
+            else priceTopY = Math.max(belowName, priceBottom - priceTotalH);                              // 단일 + peer 없음(전부 단일) → 하단 정렬
+        }
         drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP, labelBoxColor);
     } else {
-        drawPriceTiers(ctx, item, priceRightX, priceCenterY, themeColor, numColor, PRICE_SIZE, fonts, numSize, labelBoxColor);
+        // 나란히 단일 금액: 다열이고 다중가격 peer가 있으면 그 블록 중앙에 맞춤(없으면 기존 행 중앙)
+        const cy = (itemColCount(item) >= 2 && peerPriceH > 0) ? peerCenterY : priceCenterY;
+        drawPriceTiers(ctx, item, priceRightX, cy, themeColor, numColor, PRICE_SIZE, fonts, numSize, labelBoxColor);
     }
 
     // 비고 텍스트 (우하단 작은 글씨)
@@ -1869,6 +1896,29 @@ function measureSingleTierWidth(ctx, tier, numSize, fonts) {
     return w;
 }
 
+/* 금액(숫자+단위)만의 폭 — 단위박스 제외. 세로 스택 시 가격 우측 정렬·단위박스 통일 계산용. */
+function measurePriceTokensWidth(ctx, priceStr, numSize, fonts) {
+    if (!priceStr) return 0;
+    const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49);
+    const tokens = tokenizePriceText(priceStr);
+    let w = 0;
+    for (let t = 0; t < tokens.length; t++) {
+        const tok = tokens[t];
+        if (tok.type === 'num') { ctx.letterSpacing = '-1.5px'; ctx.font = `700 ${NUM_SIZE}px ${fonts.cheoeumcheoreom}`; }
+        else { ctx.letterSpacing = '0px'; ctx.font = `400 ${UNIT_SIZE}px ${fonts.main}`; }
+        w += ctx.measureText(tok.text).width;
+        if (t < tokens.length - 1 && tokens[t + 1].type !== tok.type) w += 2;
+    }
+    return w;
+}
+/* 단위박스(라벨 칩) 폭 — 라벨 좌우 패딩 18 포함. */
+function measureChipWidth(ctx, label, numSize, fonts) {
+    if (!label) return 0;
+    const CHIP_LABEL_SIZE = Math.round(numSize * 0.37);
+    ctx.font = `500 ${CHIP_LABEL_SIZE}px ${fonts.medium}`;
+    return ctx.measureText(label).width + 18;
+}
+
 function measurePriceTiersWidth(ctx, tiers, numSize, fonts) {
     if (!tiers.length) return 0;
     const TIER_GAP = 14;
@@ -1912,7 +1962,7 @@ function tokenizePriceText(str) {
 
 /* 한 행의 가격 티어들을 rightX 기준 우→좌로 그림(숫자 시각 중앙을 centerY에 정렬).
  * 단일행(drawPriceTiers)·다행(drawPriceTierRows) 양쪽이 공유. */
-function drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labelBoxColor) {
+function drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labelBoxColor, chipRightX = null) {
     const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = Math.round(numSize * 0.37);  // 라벨 칩 (금액 크기 연동)
     const CHIP_H = Math.round(CHIP_LABEL_SIZE * 2);
     const TIER_GAP = 14;
@@ -1947,7 +1997,9 @@ function drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labe
             ctx.font = `500 ${CHIP_LABEL_SIZE}px ${fonts.medium}`;
             const lw = ctx.measureText(tier.label).width;
             const chipW = lw + 18;
-            const chipX = x - chipW;
+            // 세로 스택 시 단위박스 우측 경계를 긴 금액 기준으로 통일(chipRightX). 그 외엔 금액 바로 왼쪽(x).
+            const chipRightEdge = (chipRightX != null && tiers.length === 1) ? chipRightX : x;
+            const chipX = chipRightEdge - chipW;
             ctx.fillStyle = labelBoxColor;
             roundRect(ctx, chipX, centerY - CHIP_H / 2, chipW, CHIP_H, CHIP_H / 2);
             ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -1966,9 +2018,17 @@ function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSi
 }
 
 function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fonts, numSize, TIER_H = 35, ROW_GAP = 6, labelBoxColor = '#000000') {
+    // 세로 스택(한 줄에 한 티어, 모두 라벨 있음)일 때 단위박스 우측 경계를 통일:
+    // 가장 긴 금액 폭 기준으로 단위박스를 우측 정렬 → 금액은 우측(rightX) 정렬 유지, 단위박스 일직선.
+    let chipRightX = null;
+    if (tierRows.length > 1 && tierRows.every(r => r.length === 1 && r[0].label)) {
+        let maxPriceW = 0;
+        for (const r of tierRows) maxPriceW = Math.max(maxPriceW, measurePriceTokensWidth(ctx, r[0].price, numSize, fonts));
+        chipRightX = rightX - maxPriceW - 10;
+    }
     for (let ri = 0; ri < tierRows.length; ri++) {
         const centerY = topY + ri * (TIER_H + ROW_GAP) + TIER_H / 2;
-        drawTierRow(ctx, tierRows[ri], rightX, centerY, numColor, fonts, numSize, labelBoxColor);
+        drawTierRow(ctx, tierRows[ri], rightX, centerY, numColor, fonts, numSize, labelBoxColor, chipRightX);
     }
 }
 
