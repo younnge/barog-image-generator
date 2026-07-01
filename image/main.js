@@ -203,6 +203,7 @@ function getSnapshot() {
         themeColor: document.getElementById('themeHex')?.value || '#000000',
         numColor: document.getElementById('numColorHex')?.value || '#000000',
         hlColor: document.getElementById('hlColorHex')?.value || '#FFEB3B',
+        itemHlColor: document.getElementById('itemHlColorHex')?.value || '#FF0000',
         labelBoxColor: document.getElementById('labelBoxColorHex')?.value || '#000000',
         headerHeight: document.getElementById('headerHeight')?.value || '5',
         textScale: document.getElementById('textScale')?.value || '100',
@@ -266,6 +267,8 @@ function restoreSnapshot(data) {
     if (data.themeColor) updateColorSync(data.themeColor);
     if (data.numColor) updateNumColorSync(data.numColor);
     if (data.hlColor) updateHlColorSync(data.hlColor);
+    // 항목 강조 색상: 없던 기존 저장본은 예전 동작(테마색)으로 폴백
+    updateItemHlColorSync(data.itemHlColor || data.themeColor || '#000000');
     if (data.labelBoxColor) updateLabelBoxColorSync(data.labelBoxColor);
     if (data.headerHeight !== undefined) {
         const sl = document.getElementById('headerHeight');
@@ -1537,7 +1540,7 @@ function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify, bott
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', labelBoxColor = '#000000', balance = false, bottomExact = false) {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false) {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -1613,10 +1616,10 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     // 컨텐츠 렌더링 (배경 패스와 동일 좌표)
     for (const rl of rowLayouts) {
         if (rl.type === 'full') {
-            if (rl.y < contentBottom) drawSection(ctx, rl.section, col1X, rl.y, fullW, themeColor, numColor, fonts, hlColor, labelBoxColor);
+            if (rl.y < contentBottom) drawSection(ctx, rl.section, col1X, rl.y, fullW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor);
         } else {
-            rl.left.positions.forEach(p => drawSection(ctx, p.sec, col1X, p.y, twoColW, themeColor, numColor, fonts, hlColor, labelBoxColor));
-            rl.right.positions.forEach(p => drawSection(ctx, p.sec, col2X, p.y, twoColW, themeColor, numColor, fonts, hlColor, labelBoxColor));
+            rl.left.positions.forEach(p => drawSection(ctx, p.sec, col1X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor));
+            rl.right.positions.forEach(p => drawSection(ctx, p.sec, col2X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor));
         }
     }
 
@@ -1681,7 +1684,7 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
 }
 
 
-function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', labelBoxColor = '#000000') {
+function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000') {
     let y = startY;
 
     // 섹션 헤더 바
@@ -1739,7 +1742,7 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
         // 각 칸 그리기(행 높이로 정렬, 자체 구분선은 그리지 않음 → 행 단위로 아래에서 처리)
         let cx = x;
         for (let c = 0; c < grp.items.length; c++) {
-            drawItemRow(ctx, grp.items[c], cx, y, widths[c], themeColor, numColor, '#ffffff', fonts, false, bs, ns, labelBoxColor, rowH, false, peerPriceH);
+            drawItemRow(ctx, grp.items[c], cx, y, widths[c], themeColor, numColor, itemHlColor, '#ffffff', fonts, false, bs, ns, labelBoxColor, rowH, false, peerPriceH);
             cx += widths[c];
         }
         // 칸 사이 세로 구분선
@@ -1770,7 +1773,7 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
     return y;
 }
 
-function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35, labelBoxColor = '#000000', rowHOverride = null, drawBottomDivider = true, peerPriceH = 0) {
+function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35, labelBoxColor = '#000000', rowHOverride = null, drawBottomDivider = true, peerPriceH = 0) {
     const PAD_X = 18, PAD_Y = 12;
     const NAME_SIZE = bodySize, PRICE_SIZE = 28, NOTE_SIZE = Math.round(bodySize * 0.85);  // 비고 (본문 크기 연동)
     const getLineH = (line) => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
@@ -1790,7 +1793,7 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
         ctx.textBaseline = 'middle';
         for (const chunk of chunks) {
             ctx.font = chunkFont(chunk);
-            ctx.fillStyle = chunk.isHighlight ? themeColor : hexToRgba(themeColor, 0.85);
+            ctx.fillStyle = chunk.isHighlight ? itemHlColor : hexToRgba(themeColor, 0.85);
             ctx.textAlign = 'left';
             ctx.fillText(chunk.text, cx, startY + SL_H / 2);
             cx += ctx.measureText(chunk.text).width;
@@ -1832,7 +1835,7 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, rowBg, fo
         let lx = x + PAD_X;
         for (const chunk of line.chunks) {
             ctx.font = chunk.font;
-            ctx.fillStyle = chunk.isHighlight ? themeColor : '#1a1a1a';
+            ctx.fillStyle = chunk.isHighlight ? itemHlColor : '#1a1a1a';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             ctx.fillText(chunk.text, lx, ny);
@@ -2405,6 +2408,7 @@ function generateImages() {
     const themeColor = document.getElementById('themeHex')?.value || '#000000';
     const numColor = document.getElementById('numColorHex')?.value || '#000000';
     const hlColor = document.getElementById('hlColorHex')?.value || '#FFEB3B';
+    const itemHlColor = document.getElementById('itemHlColorHex')?.value || '#FF0000';
     const labelBoxColor = document.getElementById('labelBoxColorHex')?.value || '#000000';
     const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '5', 10)) / 100;
     const topText = document.getElementById('topText')?.value || '';
@@ -2436,7 +2440,7 @@ function generateImages() {
                 });
             }
             const canvases = pages.map(page =>
-                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact)
+                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact)
             );
 
             generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -2511,6 +2515,11 @@ const MINI_PRESET_META = {
         storageKey: 'a4HlColorSlots',
         getColor: () => document.getElementById('hlColorHex')?.value || '#FFEB3B',
         apply: c => { updateHlColorSync(c); saveSnapshot(); debouncedGenerateImages(); }
+    },
+    itemHlColorPresets: {
+        storageKey: 'a4ItemHlColorSlots',
+        getColor: () => document.getElementById('itemHlColorHex')?.value || '#FF0000',
+        apply: c => { updateItemHlColorSync(c); saveSnapshot(); debouncedGenerateImages(); }
     },
     labelBoxColorPresets: {
         storageKey: 'a4LabelBoxColorSlots',
@@ -2691,6 +2700,7 @@ function updateColorSync(hex) {
 function updateTextColorSync(hex)     { applyColorSync('textColorPicker', 'textColorHex', 'textColorSwatch', hex.toUpperCase()); }
 function updateNumColorSync(hex)      { applyColorSync('numColorPicker', 'numColorHex', 'numColorSwatch', hex.toUpperCase()); }
 function updateHlColorSync(hex)       { applyColorSync('hlColorPicker', 'hlColorHex', 'hlColorSwatch', hex.toUpperCase()); }
+function updateItemHlColorSync(hex)   { applyColorSync('itemHlColorPicker', 'itemHlColorHex', 'itemHlColorSwatch', hex.toUpperCase()); }
 function updateLabelBoxColorSync(hex) { applyColorSync('labelBoxColorPicker', 'labelBoxColorHex', 'labelBoxColorSwatch', hex.toUpperCase()); }
 
 function updateSliderBg(slider) {
@@ -3034,6 +3044,33 @@ window.onload = () => {
     });
     hlColorSwatch.addEventListener('click', () => hlColorPicker.click());
     [hlColorPicker, hlColorHex].forEach(el => {
+        el.addEventListener('focus', () => { el._before = el.value; });
+        el.addEventListener('blur', () => { if (el._before !== el.value) saveSnapshot(); });
+    });
+
+    // 항목 강조 색상
+    const itemHlColorPicker = document.getElementById('itemHlColorPicker');
+    const itemHlColorHex = document.getElementById('itemHlColorHex');
+    const itemHlColorSwatch = document.getElementById('itemHlColorSwatch');
+    itemHlColorPicker.addEventListener('input', e => {
+        const c = e.target.value;
+        itemHlColorHex.value = c.toUpperCase();
+        itemHlColorSwatch.style.backgroundColor = c;
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
+    itemHlColorHex.addEventListener('input', e => {
+        let c = e.target.value;
+        if (!c.startsWith('#')) c = '#' + c;
+        if (/^#[0-9A-F]{6}$/i.test(c)) {
+            itemHlColorHex.value = c.toUpperCase();
+            itemHlColorPicker.value = c;
+            itemHlColorSwatch.style.backgroundColor = c;
+            debouncedGenerateImages();
+        }
+    });
+    itemHlColorSwatch.addEventListener('click', () => itemHlColorPicker.click());
+    [itemHlColorPicker, itemHlColorHex].forEach(el => {
         el.addEventListener('focus', () => { el._before = el.value; });
         el.addEventListener('blur', () => { if (el._before !== el.value) saveSnapshot(); });
     });
@@ -3602,6 +3639,7 @@ window.onload = () => {
     renderMiniColorPresets('numColorPresets');
     renderMiniColorPresets('textColorPresets');
     renderMiniColorPresets('hlColorPresets');
+    renderMiniColorPresets('itemHlColorPresets');
     renderMiniColorPresets('labelBoxColorPresets');
     initMiniPresetHandlers();
     document.getElementById('colorPresets')?.addEventListener('click', e => {
