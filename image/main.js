@@ -605,7 +605,15 @@ function addItemRow(itemData = {}) {
             <button class="btn-add-price-slot js-add-price-slot" title="가격 슬롯 추가" aria-label="가격 슬롯 추가">+</button>
         </div>
         <div class="item-note-row${note ? '' : ' hidden'}">
-            <textarea class="btn-input item-note-input auto-resize" placeholder="※ 비고 (작은글씨 / Enter 줄바꿈)" rows="1">${escapeHtml(note)}</textarea>
+            <div class="item-name-wrapper">
+                <textarea class="btn-input item-note-input auto-resize" placeholder="※ 비고 (작은글씨 / Enter 줄바꿈)" rows="1">${escapeHtml(note)}</textarea>
+                <div class="format-toolbar">
+                    <button class="fmt-btn fmt-color" data-open="&lt;" data-close="&gt;" title="강조색 적용">강조</button>
+                    <button class="fmt-btn fmt-up" data-open="&lt;+" data-close="+&gt;" title="글자 확대">확대</button>
+                    <button class="fmt-btn fmt-dn" data-open="&lt;-" data-close="-&gt;" title="글자 축소">축소</button>
+                    <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
+                </div>
+            </div>
         </div>
     `;
     row.dataset.cols = String(cols);
@@ -1408,7 +1416,7 @@ function computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize) {
 function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35, rowHOverride = null) {
     if (item.isSublabel) return { isSublabel: true, rowH: sublabelLayout(ctx, item, colW, fonts, bodySize).rowH, L: null, noteH: 0, priceCenterOff: 0, nameStartOff: 0 };
     const NAME_SIZE = bodySize, PAD_Y = 12, NOTE_SIZE = Math.round(bodySize * 0.85);  // 비고 (본문 크기 연동)
-    const noteH = item.note ? noteLayout(ctx, item.note, colW, NOTE_SIZE, fonts.main).H : 0;
+    const noteH = item.note ? noteLayout(ctx, item.note, colW, NOTE_SIZE, fonts).H : 0;
     const L = computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize);
     const getLineH = line => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
     const firstLineH = L.nameLines[0] ? getLineH(L.nameLines[0]) : NAME_SIZE;
@@ -1804,36 +1812,29 @@ function sublabelLayout(ctx, item, colW, fonts, bodySize) {
     const PAD_X = 18;
     const base = Math.round(bodySize * 1.1);
     const lines = wrapStyledText(ctx, item.itemName, colW - PAD_X * 2, base, true, fonts);
-    const lineH = Math.round(base * 1.28);
+    // 각 줄 높이 = 그 줄에서 가장 큰 글자 크기 × 1.28 → 확대/축소 서식에 행간이 비례
+    const lineHeights = lines.map(line => {
+        const maxSize = line.chunks.length ? Math.max(...line.chunks.map(c => c.size || base)) : base;
+        return Math.round(maxSize * 1.28);
+    });
+    const contentH = lineHeights.reduce((a, b) => a + b, 0);
     const VPAD = Math.round(bodySize * 0.4);
-    const rowH = Math.max(Math.round(bodySize * 2.2), lines.length * lineH + VPAD * 2);
-    return { lines, lineH, rowH, PAD_X };
+    const rowH = Math.max(Math.round(bodySize * 2.2), contentH + VPAD * 2);
+    return { lines, lineHeights, contentH, rowH, PAD_X };
 }
 
-/* 평문 줄바꿈 — 수동 \n 우선 분리 후 각 조각을 폭 기준(글자 단위) 자동 줄바꿈. ctx.font 미리 설정 필요. */
-function wrapPlainText(ctx, text, maxW) {
-    const out = [];
-    for (const seg of String(text || '').split('\n')) {
-        if (seg === '') { out.push(''); continue; }
-        let line = '';
-        for (const ch of seg) {
-            const test = line + ch;
-            if (line && ctx.measureText(test).width > maxW) { out.push(line); line = ch; }
-            else line = test;
-        }
-        out.push(line);
-    }
-    return out.length ? out : [''];
-}
-/* 비고(작은 글씨) 줄바꿈 레이아웃 — 측정(itemRowGeometry)·그리기(drawItemRow)가 공유해 높이 일치.
- * 단일 줄이면 기존 높이(noteSize*1.5+2)와 동일. */
-function noteLayout(ctx, note, colW, noteSize, mainFont) {
+/* 비고(작은 글씨) 줄바꿈·서식 레이아웃 — 측정(itemRowGeometry)·그리기(drawItemRow)가 공유해 높이 일치.
+ * wrapStyledText로 서식(강조·확대·축소·굵게) + 수동 \n + 폭 초과 자동 줄바꿈 처리. */
+function noteLayout(ctx, note, colW, noteSize, fonts) {
     const PAD_X = 18;
-    ctx.font = `400 ${noteSize}px ${mainFont}`;
-    ctx.letterSpacing = '0px';
-    const lines = wrapPlainText(ctx, note, colW - PAD_X * 2);
-    const lineH = noteSize * 1.1;
-    return { lines, lineH, H: lines.length * lineH + 2 };
+    const lines = wrapStyledText(ctx, note, colW - PAD_X * 2, noteSize, false, fonts);
+    // 각 줄 높이 = 그 줄에서 가장 큰 글자 크기 × 1.1 → 확대 서식 시 행(높이)이 같이 커져 실선도 내려감
+    const lineHeights = lines.map(line => {
+        const maxSize = line.chunks.length ? Math.max(...line.chunks.map(c => c.size || noteSize)) : noteSize;
+        return maxSize * 1.1;
+    });
+    const H = lineHeights.reduce((a, b) => a + b, 0) + 2;
+    return { lines, lineHeights, H };
 }
 
 function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35, labelBoxColor = '#000000', rowHOverride = null, drawBottomDivider = true, peerPriceH = 0) {
@@ -1849,11 +1850,11 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlCol
         ctx.fillRect(x, startY, colW, SL_H);
         ctx.letterSpacing = '0px';
         ctx.textBaseline = 'middle';
-        // 여러 줄을 세로 중앙 배치, 각 줄은 가로 중앙 정렬(넘치면 좌측 패딩)
-        const blockTop = startY + (SL_H - sl.lines.length * sl.lineH) / 2;
+        // 여러 줄을 세로 중앙 배치(줄별 높이 반영), 각 줄은 가로 중앙 정렬(넘치면 좌측 패딩)
+        let ly = startY + (SL_H - sl.contentH) / 2;
         sl.lines.forEach((line, li) => {
             let cx = x + Math.max(sl.PAD_X, (colW - line.totalWidth) / 2);
-            const cy = blockTop + li * sl.lineH + sl.lineH / 2;
+            const cy = ly + sl.lineHeights[li] / 2;
             for (const chunk of line.chunks) {
                 ctx.font = chunk.font;
                 ctx.fillStyle = chunk.isHighlight ? itemHlColor : hexToRgba(themeColor, 0.85);
@@ -1861,6 +1862,7 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlCol
                 ctx.fillText(chunk.text, cx, cy);
                 cx += chunk.width;
             }
+            ly += sl.lineHeights[li];
         });
         return startY + SL_H;
     }
@@ -1934,19 +1936,23 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlCol
         drawPriceTiers(ctx, item, priceRightX, cy, themeColor, numColor, PRICE_SIZE, fonts, numSize, labelBoxColor);
     }
 
-    // 비고 텍스트 (우하단 작은 글씨) — 줄바꿈 지원(수동 \n·폭 초과 자동)
+    // 비고 텍스트 (우하단 작은 글씨) — 줄바꿈·서식(강조·확대·축소·굵게) 지원, 우측 정렬
     if (hasNote) {
-        const nl = noteLayout(ctx, item.note, colW, NOTE_SIZE, fonts.main);
-        ctx.fillStyle = '#666666';
-        ctx.font = `400 ${NOTE_SIZE}px ${fonts.main}`;
-        ctx.textAlign = 'right';
+        const nl = noteLayout(ctx, item.note, colW, NOTE_SIZE, fonts);
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.letterSpacing = '0px';
         let ny = startY + rowH - noteH + 1;
-        for (const line of nl.lines) {
-            ctx.fillText(line, x + colW - PAD_X, ny);
-            ny += nl.lineH;
-        }
+        nl.lines.forEach((line, i) => {
+            let lx = x + colW - PAD_X - line.totalWidth;   // 우측 정렬 시작 x
+            for (const chunk of line.chunks) {
+                ctx.font = chunk.font;
+                ctx.fillStyle = chunk.isHighlight ? itemHlColor : '#666666';
+                ctx.fillText(chunk.text, lx, ny);
+                lx += chunk.width;
+            }
+            ny += nl.lineHeights[i];
+        });
     }
 
     return startY + rowH;
@@ -3476,7 +3482,7 @@ window.onload = () => {
         const btn = e.target.closest('.fmt-btn');
         if (!btn) return;
         e.preventDefault();
-        const ta = btn.closest('.item-name-wrapper')?.querySelector('.item-name, .section-title-input');
+        const ta = btn.closest('.item-name-wrapper')?.querySelector('.item-name, .section-title-input, .item-note-input');
         if (!ta) return;
         const open = btn.dataset.open, close = btn.dataset.close;
         const s = ta.selectionStart, end = ta.selectionEnd;
