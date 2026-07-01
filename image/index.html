@@ -193,13 +193,6 @@
                             <span class="label-tip-wrap"><input type="number" id="textScaleLabel" class="label-tip-input" min="70" max="150" step="1" value="100"><span class="label-tip-unit">%</span></span>
                         </div>
                         <input type="range" id="textScale" min="70" max="150" value="100" step="1" class="slider-input">
-                        <label class="toggle-row" title="켜면 내용이 항상 A4 한 장에 들어가도록 글자 크기를 자동 조절합니다(슬라이더 잠금). 끄면 슬라이더로 직접 조절합니다.">
-                            <span class="switch"><input type="checkbox" id="autoFitOnePage"><span class="track"></span></span>
-                            <span class="toggle-text">
-                                <span class="toggle-label">글자 크기 자동 맞춤</span>
-                                <span class="toggle-desc">내용이 한 장에 다 들어가게 자동 조절</span>
-                            </span>
-                        </label>
                     </div>
                 </div>
 
@@ -209,25 +202,17 @@
                         <span class="label-tip-wrap"><input type="number" id="sectionGapLabel" class="label-tip-input" min="0" max="60" step="1" value="15"><span class="label-tip-unit">px</span></span>
                     </div>
                     <input type="range" id="sectionGap" min="0" max="60" value="15" step="1" class="slider-input">
-                    <span class="gap-auto-hint" id="sectionGapHint">자동 맞춤이 켜져 있어 간격이 자동 분배됩니다 — 끄면 직접 조절할 수 있어요</span>
+                    <span class="gap-auto-hint" id="sectionGapHint">‘페이지 끝까지 채우기’가 켜져 있어 간격이 자동 분배됩니다 — 끄면 직접 조절할 수 있어요</span>
                 </div>
 
-                <button class="btn-toggle-all btn-balance-full btn-auto-all" id="btnAutoAll" title="좌우 2단 균형 + 위·아래 끝 맞춤 + 글자 크기·헤더 높이를 한 번에 자동으로 맞춥니다. 이후 슬라이더로 미세 조정할 수 있어요.">✨ 한 번에 자동 맞춤</button>
-
-                <button class="adv-toggle" id="advToggle" aria-expanded="false" aria-controls="advPanel">
-                    <span>고급 설정 (수동 조정)</span>
-                    <svg class="adv-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-                <div class="adv-panel" id="advPanel" hidden>
-                    <button class="btn-toggle-all btn-balance-full" id="btnBalance" aria-pressed="false" title="좌우 컬럼 높이를 자동으로 균등 배분하고 남는 간격을 균등 분배합니다">좌우 균등 맞춤</button>
-                    <label class="toggle-row toggle-sub" id="bottomExactRow" title="켜면 두 컬럼 하단을 페이지 끝에 정확히 맞춥니다. «좌우 균등 맞춤»이 켜져 있을 때만 적용됩니다.">
-                        <span class="switch"><input type="checkbox" id="balanceBottomExact"><span class="track"></span></span>
-                        <span class="toggle-text">
-                            <span class="toggle-label">위·아래 끝 맞추기</span>
-                            <span class="toggle-desc">좌우 칸 아래 끝을 페이지 끝에 맞춤</span>
-                        </span>
-                    </label>
-                </div>
+                <button class="btn-toggle-all btn-balance-full" id="btnBalance" aria-pressed="false" title="섹션 내용을 좌·우 컬럼에 높이가 비슷하도록 나눕니다 (텍스트 크기·섹션 간격은 그대로 유지)">양쪽 높이 맞추기</button>
+                <label class="toggle-row toggle-sub" id="bottomExactRow" title="켜면 두 컬럼 하단을 페이지 끝에 정확히 맞춥니다. «양쪽 높이 맞추기»가 켜져 있을 때만 적용됩니다.">
+                    <span class="switch"><input type="checkbox" id="balanceBottomExact"><span class="track"></span></span>
+                    <span class="toggle-text">
+                        <span class="toggle-label">페이지 끝까지 채우기</span>
+                        <span class="toggle-desc">좌우 칸 아래 끝을 페이지 끝에 맞춤</span>
+                    </span>
+                </label>
 
             </div>
 

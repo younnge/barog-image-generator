@@ -660,6 +660,14 @@ body {
 .item-col-btn:hover { color: var(--primary); background: var(--primary-light); }
 .item-col-btn.item-col-active { background: var(--primary); color: #fff; }
 
+/* 항목 컨트롤(칸선택·배치·소제목·비고)을 이름칸 아래 둘째 줄로 분리 → 이름 입력칸 넓게 확보 */
+.item-row-controls {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 0 8px 8px 36px;
+}
+.item-row-controls .btn-action-text,
+.item-row-controls .item-cols-seg { margin-top: 0; }
+
 .item-prices-row:not(.hidden) {
     display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
     padding: 4px 8px 6px 36px;
@@ -783,7 +791,9 @@ body {
 .section-group-item .item-prices-row:not(.hidden),
 .section-group-last .item-prices-row:not(.hidden),
 .section-group-item .item-note-row:not(.hidden),
-.section-group-last .item-note-row:not(.hidden) {
+.section-group-last .item-note-row:not(.hidden),
+.section-group-item .item-row-controls,
+.section-group-last .item-row-controls {
     padding-left: 44px;
 }
 

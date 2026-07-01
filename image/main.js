@@ -255,7 +255,7 @@ function restoreSnapshot(data) {
         const cb = document.getElementById('balanceBottomExact');
         if (cb) cb.checked = balanceBottomExact;
     }
-    if (data.autoFit !== undefined) autoFitOnePage = !!data.autoFit;
+    autoFitOnePage = false;   // '자동으로 한 장에 맞춤' 기능 제거 — 텍스트 크기는 항상 수동
     // 사용자 수동 텍스트 크기 복원(없으면 저장된 슬라이더 값으로 폴백)
     manualTextScale = (data.manualTextScale !== undefined ? parseInt(data.manualTextScale) : parseInt(data.textScale)) || 100;
     syncOnePageUI();
@@ -573,6 +573,10 @@ function addItemRow(itemData = {}) {
                     <button class="fmt-btn fmt-bold" data-open="{" data-close="}" title="굵게">굵게</button>
                 </div>
             </div>
+            <button class="btn-copy js-dup-item" title="복제" aria-label="항목 복제">${COPY_SVG}</button>
+            <button class="btn-remove js-del-item" title="삭제" aria-label="항목 삭제">${CLOSE_SVG}</button>
+        </div>
+        <div class="item-row-controls">
             <div class="item-cols-seg" title="이 항목이 섹션 안에서 차지하는 가로 칸 (같은 칸끼리 한 줄에 모임)">
                 <button class="item-col-btn js-itemcol${cols === 1 ? ' item-col-active' : ''}" data-cols="1" title="전체폭">${colSegIcon(1)}</button>
                 <button class="item-col-btn js-itemcol${cols === 2 ? ' item-col-active' : ''}" data-cols="2" title="2열">${colSegIcon(2)}</button>
@@ -585,8 +589,6 @@ function addItemRow(itemData = {}) {
             <input type="checkbox" class="item-sublabel" style="display:none" ${isSublabel ? 'checked' : ''}>
             <button class="btn-action-text js-toggle-sublabel${isSublabel ? ' btn-action-active' : ''}" title="소제목 행으로 표시 (가격 없이 강조 행)">소제목</button>
             <button class="btn-action-text js-toggle-note${note ? ' btn-action-active' : ''}" title="비고 텍스트 추가">비고</button>
-            <button class="btn-copy js-dup-item" title="복제" aria-label="항목 복제">${COPY_SVG}</button>
-            <button class="btn-remove js-del-item" title="삭제" aria-label="항목 삭제">${CLOSE_SVG}</button>
         </div>
         <div class="item-prices-row${isSublabel ? ' hidden' : ''}">
             <div class="price-slots-wrap"></div>
@@ -1575,7 +1577,8 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     const col2X = MARGIN + twoColW + COL_GAP;
 
     // 행 레이아웃 1회 계산 — 카드 배경 패스와 그리기 패스가 동일 좌표를 사용하도록.
-    // balance=true 이면 마지막 split 행에서 간격을 균등 분배해 두 컬럼 하단을 맞춤.
+    // '페이지 끝까지 채우기'(bottomExact)일 때만 마지막 split 행에서 간격을 분배해 하단을 맞춤.
+    // 양쪽 높이 맞추기만 켠 경우엔 수동 섹션 간격을 그대로 유지(내용만 좌/우로 나눔).
     const lastRowIdx = rows.length - 1;
     const rowLayouts = [];
     let cy = contentTop;
@@ -1586,7 +1589,7 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
             rowLayouts.push({ type: 'full', section: row.section, y: cy, h });
             cy += h + currentSectionGap();
         } else {
-            const justify = balance && ri === lastRowIdx;
+            const justify = bottomExact && ri === lastRowIdx;
             const left = layoutColumn(ctx, row.left, cy, contentBottom, twoColW, fonts, justify, bottomExact);
             const right = layoutColumn(ctx, row.right, cy, contentBottom, twoColW, fonts, justify, bottomExact);
             rowLayouts.push({ type: 'split', left, right });
@@ -2353,11 +2356,14 @@ function syncOnePageUI() {
 
 /* '섹션 간격' UI 동기화: 균등/자동 맞춤이 켜지면 간격이 자동 분배되므로 슬라이더를 잠가 혼동을 막는다. */
 function syncSectionGapUI() {
+    // 간격이 자동 분배되는 경우는 '페이지 끝까지 채우기'가 켜졌을 때뿐 → 그때만 잠금.
+    // 양쪽 높이 맞추기만 켠 경우엔 수동 간격을 그대로 쓰므로 슬라이더를 열어둔다.
+    const gapAuto = layoutBalanced && balanceBottomExact;
     const slider = document.getElementById('sectionGap');
     const label = document.getElementById('sectionGapLabel');
-    if (slider) slider.disabled = layoutBalanced;
-    if (label) label.disabled = layoutBalanced;
-    document.getElementById('sectionGapGroup')?.classList.toggle('auto-locked', layoutBalanced);
+    if (slider) slider.disabled = gapAuto;
+    if (label) label.disabled = gapAuto;
+    document.getElementById('sectionGapGroup')?.classList.toggle('auto-locked', gapAuto);
 }
 
 /* 주어진(이미 균형 처리된) pages 를 한 장에 담는 최대 크기(70~150%)를 찾아 슬라이더에 반영.
@@ -2861,15 +2867,13 @@ function toggleBalanceLayout() {
     if (layoutBalanced && balanceStale) {
         restoreBalanceSnapshot();      // 이전 균형 흔적(자동 구분선 등) 정리 후 원본 기준 복귀
         captureBalanceSnapshot();      // 갱신된 내용을 새 기준으로 저장
-        reorderDomBalanced();          // 다시 좌/우 균형 배치
-        autoFitTextScale();
+        reorderDomBalanced();          // 다시 좌/우 균형 배치 (텍스트 크기·간격은 손대지 않음)
         balanceStale = false;
     } else if (!layoutBalanced) {
         layoutBalanced = true;
         balanceStale = false;
         captureBalanceSnapshot();      // 되돌리기용 원래 상태 저장
-        reorderDomBalanced();          // 설정 패널의 섹션·구분선을 좌/우로 실제 정리
-        autoFitTextScale();            // 적절한 전체 텍스트 크기 1회 자동 설정
+        reorderDomBalanced();          // 섹션을 높이 기준으로 좌/우에 비슷하게 분배(내용만 나눔)
     } else {
         layoutBalanced = false;
         balanceStale = false;
@@ -2925,10 +2929,10 @@ function updateBalanceBtn() {
     btn.setAttribute('aria-pressed', layoutBalanced ? 'true' : 'false');   // 토글 상태 스크린리더 노출
     if (layoutBalanced && balanceStale) {
         btn.textContent = '다시 맞추기 ⟳';
-        btn.title = '내용이 바뀌었습니다 — 클릭하면 좌우 균형을 다시 맞춥니다';
+        btn.title = '내용이 바뀌었습니다 — 클릭하면 양쪽 높이를 다시 맞춥니다';
     } else {
-        btn.textContent = layoutBalanced ? '균등 맞춤 ✓' : '좌우 균등 맞춤';
-        btn.title = '좌우 컬럼 높이를 자동으로 균등 배분하고 남는 간격을 균등 분배합니다';
+        btn.textContent = layoutBalanced ? '양쪽 높이 맞춤 ✓' : '양쪽 높이 맞추기';
+        btn.title = '섹션 내용을 좌·우 컬럼에 높이가 비슷하도록 나눕니다(텍스트 크기·간격은 그대로)';
     }
     syncBottomExactUI();
 }
@@ -2942,7 +2946,7 @@ function syncBottomExactUI() {
     const desc = row.querySelector('.toggle-desc');
     if (desc) desc.textContent = layoutBalanced
         ? '좌우 칸 아래 끝을 페이지 끝에 맞춤'
-        : '먼저 «좌우 균등 맞춤»을 켜면 사용할 수 있어요';
+        : '먼저 «양쪽 높이 맞추기»를 켜면 사용할 수 있어요';
 }
 
 /* ============================================================
@@ -3207,7 +3211,7 @@ window.onload = () => {
     });
     syncOnePageUI();   // 초기 잠금 상태 반영
     syncSectionGapUI();   // 섹션 간격 슬라이더 초기 잠금 상태 반영
-    syncBottomExactUI();   // '위·아래 끝 맞추기' 초기 활성/비활성 반영
+    syncBottomExactUI();   // '페이지 끝까지 채우기' 초기 활성/비활성 반영
 
     // 텍스트 색상 피커
     const textColorPicker = document.getElementById('textColorPicker');
@@ -3381,18 +3385,9 @@ window.onload = () => {
     document.getElementById('btnToggleAll').addEventListener('click', toggleAllSections);
     document.getElementById('btnBalance').addEventListener('click', toggleBalanceLayout);
     document.getElementById('btnAutoAll')?.addEventListener('click', autoLayoutAll);
-    // 고급 설정(수동 조정) 접기/펼치기
-    const advToggle = document.getElementById('advToggle');
-    const advPanel = document.getElementById('advPanel');
-    advToggle?.addEventListener('click', () => {
-        const open = advPanel.hidden;
-        advPanel.hidden = !open;
-        advToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    });
     document.getElementById('balanceBottomExact')?.addEventListener('change', e => {
         balanceBottomExact = e.target.checked;
-        // 켜진 균등 맞춤에 즉시 반영: 잔여를 다시 계산해 최적 크기로 맞춤
-        if (layoutBalanced) autoFitTextScale();
+        syncSectionGapUI();   // 채우기 켜짐/꺼짐에 따라 섹션 간격 슬라이더 잠금 갱신
         generateImages();
         saveSnapshot();
     });
