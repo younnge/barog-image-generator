@@ -800,7 +800,7 @@ body {
 .price-slot { display: flex; gap: 4px; align-items: center; }
 .price-label-input { width: 54px; font-size: 12px; padding: 5px 7px; border-color: rgba(0,0,0,0.1); border-radius: 7px; }
 .price-val-input { width: 76px; font-size: 12px; padding: 5px 7px; border-color: rgba(0,0,0,0.1); border-radius: 7px; }
-.item-note-input { flex: 1; min-width: 120px; font-size: 11px; padding: 5px 9px; color: #888; border-color: rgba(0,0,0,0.1); font-style: italic; }
+.item-note-input { flex: 1; min-width: 120px; font-size: 11px; padding: 5px 9px; color: #888; border-color: rgba(0,0,0,0.1); font-style: italic; resize: none; overflow: hidden; line-height: 1.4; font-family: inherit; box-sizing: border-box; }
 
 /* 포맷 툴바 */
 .format-toolbar {
