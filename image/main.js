@@ -208,6 +208,7 @@ function getSnapshot() {
         headerHeight: document.getElementById('headerHeight')?.value || '5',
         textScale: document.getElementById('textScale')?.value || '100',
         sectionGap: document.getElementById('sectionGap')?.value || '15',
+        sectionGapRight: document.getElementById('sectionGapRight')?.value || '15',
         balanced: layoutBalanced,
         bottomExact: balanceBottomExact,
         autoFit: autoFitOnePage,
@@ -290,6 +291,15 @@ function restoreSnapshot(data) {
             sl.value = data.sectionGap;
             updateSliderBg(sl);
             document.getElementById('sectionGapLabel').value = data.sectionGap;
+        }
+    }
+    {   // 오른쪽 컬럼 간격 복원(없던 기존 저장본은 왼쪽 값으로 폴백)
+        const sr = document.getElementById('sectionGapRight');
+        if (sr) {
+            const rv = data.sectionGapRight !== undefined ? data.sectionGapRight : (data.sectionGap !== undefined ? data.sectionGap : '15');
+            sr.value = rv;
+            updateSliderBg(sr);
+            const rl = document.getElementById('sectionGapRightLabel'); if (rl) rl.value = rv;
         }
     }
     const container = document.getElementById('itemsContainer');
@@ -1486,10 +1496,18 @@ const MARGIN = 41;
 const COL_GAP = 10;
 /* 섹션 사이 기본 간격(px) — 슬라이더 미설정 시 폴백 */
 const SECTION_GAP = 15;
-/* 사용자가 '섹션 간격' 슬라이더로 조절한 섹션 사이 세로 간격(px). 미설정 시 기본값. */
+/* 사용자가 '왼쪽 간격' 슬라이더로 조절한 섹션 사이 세로 간격(px). 미설정 시 기본값.
+ * 왼쪽 컬럼·전체폭 섹션·세로 흐름 간격의 기준값. */
 function currentSectionGap() {
     const v = parseInt(document.getElementById('sectionGap')?.value, 10);
     return Number.isFinite(v) ? v : SECTION_GAP;
+}
+/* '오른쪽 간격' 슬라이더 값(오른쪽 컬럼 전용). 없으면 왼쪽 값으로 폴백. */
+function currentSectionGapRight() {
+    const el = document.getElementById('sectionGapRight');
+    if (!el) return currentSectionGap();
+    const v = parseInt(el.value, 10);
+    return Number.isFinite(v) ? v : currentSectionGap();
 }
 /* 헤더(제목·기간) 아래와 섹션 시작 사이 간격. 작을수록 섹션이 상단 텍스트에 붙음 */
 const HEADER_CONTENT_GAP = 5;
@@ -1516,16 +1534,17 @@ function computeTwoColW() {
  *   - bottomExact=true : 상한 없이 남는 공간을 전부 간격에 분배해 마지막 섹션 하단을 bottomY 에 정확히 맞춤.
  *     (잔여가 작을수록 간격은 최소(SECTION_GAP)에 가까움 — 텍스트 크기 최적화로 잔여를 줄임)
  * 섹션이 1개뿐이면 분배할 간격이 없어 상단 정렬로 둠. */
-function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify, bottomExact) {
+function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify, bottomExact, baseGap) {
+    if (!Number.isFinite(baseGap)) baseGap = currentSectionGap();   // 이 컬럼의 기본 섹션 간격
     const heights = sections.map(sec => measureSection(ctx, sec, colW, fonts));
     const contentH = heights.reduce((a, b) => a + b, 0);
-    let gap = currentSectionGap();
+    let gap = baseGap;
     if (justify && sections.length > 1) {
         const avail = bottomY - startY - contentH;            // 남는 세로 공간
         if (avail > 0) {
             const evenGap = avail / (sections.length - 1);
             // 하단 정확 맞춤: 상한 없이 전부 분배(바닥 정확 일치). 일반: 상한으로 빈 느낌 방지.
-            gap = bottomExact ? Math.max(currentSectionGap(), evenGap) : Math.min(evenGap, MAX_JUSTIFY_GAP);
+            gap = bottomExact ? Math.max(baseGap, evenGap) : Math.min(evenGap, MAX_JUSTIFY_GAP);
         }
     }
     const positions = [];
@@ -1590,8 +1609,8 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
             cy += h + currentSectionGap();
         } else {
             const justify = bottomExact && ri === lastRowIdx;
-            const left = layoutColumn(ctx, row.left, cy, contentBottom, twoColW, fonts, justify, bottomExact);
-            const right = layoutColumn(ctx, row.right, cy, contentBottom, twoColW, fonts, justify, bottomExact);
+            const left = layoutColumn(ctx, row.left, cy, contentBottom, twoColW, fonts, justify, bottomExact, currentSectionGap());
+            const right = layoutColumn(ctx, row.right, cy, contentBottom, twoColW, fonts, justify, bottomExact, currentSectionGapRight());
             rowLayouts.push({ type: 'split', left, right });
             cy = Math.max(left.endY, right.endY) + currentSectionGap();
         }
@@ -2359,10 +2378,9 @@ function syncSectionGapUI() {
     // 간격이 자동 분배되는 경우는 '페이지 끝까지 채우기'가 켜졌을 때뿐 → 그때만 잠금.
     // 양쪽 높이 맞추기만 켠 경우엔 수동 간격을 그대로 쓰므로 슬라이더를 열어둔다.
     const gapAuto = layoutBalanced && balanceBottomExact;
-    const slider = document.getElementById('sectionGap');
-    const label = document.getElementById('sectionGapLabel');
-    if (slider) slider.disabled = gapAuto;
-    if (label) label.disabled = gapAuto;
+    ['sectionGap', 'sectionGapRight', 'sectionGapLabel', 'sectionGapRightLabel'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.disabled = gapAuto;
+    });
     document.getElementById('sectionGapGroup')?.classList.toggle('auto-locked', gapAuto);
 }
 
@@ -3136,37 +3154,40 @@ window.onload = () => {
         saveSnapshot();
     });
 
-    // 섹션 간격 슬라이더
-    const gapSlider = document.getElementById('sectionGap');
-    if (gapSlider) {
-        gapSlider.addEventListener('input', () => {
-            document.getElementById('sectionGapLabel').value = gapSlider.value;
-            updateSliderBg(gapSlider);
+    // 섹션 간격 슬라이더 (왼쪽/오른쪽 각각 동일 배선)
+    function wireGapSlider(sliderId, labelId) {
+        const slider = document.getElementById(sliderId);
+        if (!slider) return;
+        const input = document.getElementById(labelId);
+        slider.addEventListener('input', () => {
+            if (input) input.value = slider.value;
+            updateSliderBg(slider);
             debouncedGenerateImages();
             handleInputSnapshot();
         });
-        updateSliderBg(gapSlider);
-
-        const gapInput = document.getElementById('sectionGapLabel');
-        gapInput.addEventListener('input', () => {
-            let v = parseInt(gapInput.value);
+        updateSliderBg(slider);
+        if (!input) return;
+        input.addEventListener('input', () => {
+            let v = parseInt(input.value);
             if (isNaN(v)) return;
             v = Math.min(Math.max(v, 0), 60);
-            gapSlider.value = v;
-            updateSliderBg(gapSlider);
+            slider.value = v;
+            updateSliderBg(slider);
             debouncedGenerateImages();
             handleInputSnapshot();
         });
-        gapInput.addEventListener('blur', () => {
-            let v = parseInt(gapInput.value);
+        input.addEventListener('blur', () => {
+            let v = parseInt(input.value);
             if (isNaN(v)) v = 15;
             v = Math.min(Math.max(v, 0), 60);
-            gapInput.value = v;
-            gapSlider.value = v;
-            updateSliderBg(gapSlider);
+            input.value = v;
+            slider.value = v;
+            updateSliderBg(slider);
             saveSnapshot();
         });
     }
+    wireGapSlider('sectionGap', 'sectionGapLabel');
+    wireGapSlider('sectionGapRight', 'sectionGapRightLabel');
 
     // 전체 텍스트 크기 슬라이더
     const textScaleSlider = document.getElementById('textScale');

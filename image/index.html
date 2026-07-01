@@ -196,12 +196,23 @@
                     </div>
                 </div>
 
-                <div class="design-group" id="sectionGapGroup">
-                    <div class="label-with-tip">
-                        <span class="label-text">섹션 간격</span>
-                        <span class="label-tip-wrap"><input type="number" id="sectionGapLabel" class="label-tip-input" min="0" max="60" step="1" value="15"><span class="label-tip-unit">px</span></span>
+                <div id="sectionGapGroup">
+                    <div class="design-2col">
+                        <div class="design-group">
+                            <div class="label-with-tip">
+                                <span class="label-text">좌측 간격</span>
+                                <span class="label-tip-wrap"><input type="number" id="sectionGapLabel" class="label-tip-input" min="0" max="60" step="1" value="15"><span class="label-tip-unit">px</span></span>
+                            </div>
+                            <input type="range" id="sectionGap" min="0" max="60" value="15" step="1" class="slider-input">
+                        </div>
+                        <div class="design-group">
+                            <div class="label-with-tip">
+                                <span class="label-text">우측 간격</span>
+                                <span class="label-tip-wrap"><input type="number" id="sectionGapRightLabel" class="label-tip-input" min="0" max="60" step="1" value="15"><span class="label-tip-unit">px</span></span>
+                            </div>
+                            <input type="range" id="sectionGapRight" min="0" max="60" value="15" step="1" class="slider-input">
+                        </div>
                     </div>
-                    <input type="range" id="sectionGap" min="0" max="60" value="15" step="1" class="slider-input">
                     <span class="gap-auto-hint" id="sectionGapHint">‘페이지 끝까지 채우기’가 켜져 있어 간격이 자동 분배됩니다 — 끄면 직접 조절할 수 있어요</span>
                 </div>
 
