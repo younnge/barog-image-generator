@@ -216,14 +216,16 @@
                     <span class="gap-auto-hint" id="sectionGapHint">‘페이지 끝까지 채우기’가 켜져 있어 간격이 자동 분배됩니다 — 끄면 직접 조절할 수 있어요</span>
                 </div>
 
-                <button class="btn-toggle-all btn-balance-full" id="btnBalance" aria-pressed="false" title="섹션 내용을 좌·우 컬럼에 높이가 비슷하도록 나눕니다 (텍스트 크기·섹션 간격은 그대로 유지)">양쪽 높이 맞추기</button>
-                <label class="toggle-row toggle-sub" id="bottomExactRow" title="켜면 두 컬럼 하단을 페이지 끝에 정확히 맞춥니다. «양쪽 높이 맞추기»가 켜져 있을 때만 적용됩니다.">
-                    <span class="switch"><input type="checkbox" id="balanceBottomExact"><span class="track"></span></span>
-                    <span class="toggle-text">
-                        <span class="toggle-label">페이지 끝까지 채우기</span>
-                        <span class="toggle-desc">좌우 칸 아래 끝을 페이지 끝에 맞춤</span>
-                    </span>
-                </label>
+                <div class="balance-row">
+                    <button class="btn-toggle-all btn-balance-full btn-balance-half" id="btnBalance" aria-pressed="false" title="섹션 내용을 좌·우 컬럼에 높이가 비슷하도록 나눕니다 (텍스트 크기·섹션 간격은 그대로 유지)">양쪽 높이 맞추기</button>
+                    <label class="toggle-row toggle-sub bottom-exact-inline" id="bottomExactRow" title="켜면 두 컬럼 하단을 페이지 끝에 정확히 맞춥니다. «양쪽 높이 맞추기»가 켜져 있을 때만 적용됩니다.">
+                        <span class="switch"><input type="checkbox" id="balanceBottomExact"><span class="track"></span></span>
+                        <span class="toggle-text">
+                            <span class="toggle-label">페이지 끝까지 채우기</span>
+                            <span class="toggle-desc">좌우 칸 아래 끝을 페이지 끝에 맞춤</span>
+                        </span>
+                    </label>
+                </div>
 
             </div>
 

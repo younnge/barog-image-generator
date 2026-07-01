@@ -435,6 +435,10 @@ body {
     background: rgba(0,0,0,0.05); color: var(--text-main); margin-top: 4px;
 }
 .btn-balance-full:hover { background: rgba(0,0,0,0.09); }
+/* 균등 맞추기 버튼(좌 절반) + 끝까지 채우기 토글(우 절반)을 한 행에 */
+.balance-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.balance-row .btn-balance-half { width: auto; flex: 0 0 46%; margin-top: 0; }
+.balance-row .bottom-exact-inline { flex: 1; min-width: 0; margin-top: 0; padding-left: 2px; gap: 9px; }
 /* 원클릭 '한 번에 자동 맞춤' — 파란색 강조(주 버튼) */
 .btn-auto-all { margin-top: 10px; background: var(--primary); color: #fff; font-weight: 700; }
 .btn-auto-all:hover { background: var(--primary); color: #fff; filter: brightness(.95); }
