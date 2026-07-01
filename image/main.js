@@ -1406,7 +1406,10 @@ function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35, ro
     } else {
         // 나란히. 세로 티어면 가격 블록 높이도 내용 높이에 포함(이름·가격 중 큰 쪽)
         const SPAD = stackPadY(numSize);   // 아래로 모드와 동일한 좁은 상하 여백
-        const contentH = L.sideVerticalTiers ? Math.max(Math.ceil(L.nameBlockH), L.priceTotalH) : Math.ceil(L.nameBlockH);
+        // 가격 블록 높이도 내용에 포함(가로 다중가격·단일가격은 numSize, 세로 티어는 priceTotalH).
+        // 비고가 있으면 가격 숫자(numSize)를 무시하던 기존 버그로 가격이 위로 넘쳐 상단에 치우침 → 여기서 방지.
+        const priceBlockH = L.sideVerticalTiers ? L.priceTotalH : numSize;
+        const contentH = Math.max(Math.ceil(L.nameBlockH), priceBlockH);
         rowH = Math.max(contentH + SPAD * 2 + noteH, Math.round(numSize * MIN_ROW_H_RATIO));
         if (rowHOverride != null && rowHOverride > rowH) rowH = rowHOverride;
         const priceAreaH = rowH - noteH;
