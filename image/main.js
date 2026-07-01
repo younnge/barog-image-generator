@@ -2,6 +2,7 @@
  * 전역 상태
  * ============================================================ */
 let generatedImagesUrls = [];
+let sectionPreviewRects = [];   // 렌더된 각 섹션의 미리보기 내 위치(비율) — 북마크 클릭 시 이동·하이라이트용
 let cachedBgImg = null;
 let isBackedUp = true;
 let activeColumnTab = 'left';
@@ -785,6 +786,7 @@ function refreshBookmarks() {
             refreshAccordionVisibility();
             refreshBookmarks();
             scrollToItem(node);
+            highlightPreviewSection(node);
         });
         return entry;
     }
@@ -998,6 +1000,45 @@ function scrollToItem(el) {
         el.classList.add('bm-highlight');
         setTimeout(() => el.classList.remove('bm-highlight'), 800);
     }, itemsTabBtn && !itemsTabBtn.classList.contains('active') ? 80 : 0);
+}
+
+/* 북마크 클릭 시 오른쪽 미리보기에서 해당 섹션 위치로 스크롤 + 반투명 하이라이트를 잠깐 표시. */
+let _previewHlTimer = null;
+function highlightPreviewSection(node) {
+    const container = document.getElementById('previewContainer');
+    if (!container) return;
+    const rect = sectionPreviewRects.find(r => r.node === node);
+    if (!rect) return;   // 아직 생성 전이거나 넘쳐서 잘린 섹션
+    const imgs = container.querySelectorAll('img');
+    const img = imgs[rect.page];
+    if (!img || !img.clientHeight) return;
+
+    const left = img.offsetLeft + rect.fx * img.clientWidth;
+    const top = img.offsetTop + rect.fy * img.clientHeight;
+    const width = rect.fw * img.clientWidth;
+    const height = rect.fh * img.clientHeight;
+
+    // 하이라이트 오버레이(재사용)
+    let hl = container.querySelector('.preview-highlight');
+    if (!hl) {
+        hl = document.createElement('div');
+        hl.className = 'preview-highlight';
+        container.appendChild(hl);
+    }
+    hl.style.left = left + 'px';
+    hl.style.top = top + 'px';
+    hl.style.width = width + 'px';
+    hl.style.height = height + 'px';
+
+    // 실제로 스크롤되는 조상(미리보기 컨테이너 또는 페이지)이 무엇이든 해당 위치로 이동.
+    hl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+
+    // 리플로우 강제 후 애니메이션 재시작
+    hl.classList.remove('show');
+    void hl.offsetWidth;
+    hl.classList.add('show');
+    clearTimeout(_previewHlTimer);
+    _previewHlTimer = setTimeout(() => hl.classList.remove('show'), 1400);
 }
 
 function initBookmarkObserver() {
@@ -1572,7 +1613,7 @@ function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify, bott
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false) {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false, rectSink = null) {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -1647,12 +1688,18 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     ctx.shadowOffsetY = 0;
 
     // 컨텐츠 렌더링 (배경 패스와 동일 좌표)
+    // rectSink 가 주어지면 각 섹션의 위치(W·H 대비 비율)를 기록 → 북마크 클릭 시 미리보기 하이라이트에 사용.
+    const recordRect = (sec, x, yy, w, h) => {
+        if (!rectSink || !sec || !sec._node || yy >= contentBottom) return;
+        const ch = Math.min(h, contentBottom - yy);
+        rectSink.rects.push({ node: sec._node, page: rectSink.page, fx: x / W, fy: yy / H, fw: w / W, fh: ch / H });
+    };
     for (const rl of rowLayouts) {
         if (rl.type === 'full') {
-            if (rl.y < contentBottom) drawSection(ctx, rl.section, col1X, rl.y, fullW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor);
+            if (rl.y < contentBottom) { drawSection(ctx, rl.section, col1X, rl.y, fullW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor); recordRect(rl.section, col1X, rl.y, fullW, rl.h); }
         } else {
-            rl.left.positions.forEach(p => drawSection(ctx, p.sec, col1X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor));
-            rl.right.positions.forEach(p => drawSection(ctx, p.sec, col2X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor));
+            rl.left.positions.forEach(p => { drawSection(ctx, p.sec, col1X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor); recordRect(p.sec, col1X, p.y, twoColW, p.h); });
+            rl.right.positions.forEach(p => { drawSection(ctx, p.sec, col2X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor); recordRect(p.sec, col2X, p.y, twoColW, p.h); });
         }
     }
 
@@ -2175,6 +2222,7 @@ function parseDomToPages() {
                 bodySize: parseInt(node.querySelector('.js-body-size-display')?.textContent) || 20,
                 numSize: parseInt(node.querySelector('.js-num-size-display')?.textContent) || 35,
                 isFullWidth: node.dataset.fullWidth === 'true',
+                _node: node,          // 미리보기 하이라이트용 — 대응하는 섹션 헤더 DOM
                 items: []
             };
         } else if (node.classList.contains('item-row')) {
@@ -2516,8 +2564,9 @@ function generateImages() {
                     });
                 });
             }
-            const canvases = pages.map(page =>
-                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact)
+            sectionPreviewRects = [];   // 북마크 → 미리보기 하이라이트용 섹션 위치 맵(재생성)
+            const canvases = pages.map((page, pi) =>
+                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact, { page: pi, rects: sectionPreviewRects })
             );
 
             generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));

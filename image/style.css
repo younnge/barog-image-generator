@@ -931,6 +931,27 @@ body {
     flex: 1; overflow-y: auto;
     display: flex; flex-direction: column; gap: 20px;
     align-items: center;
+    position: relative;   /* 북마크 하이라이트 오버레이 기준 */
+}
+/* 북마크 클릭 시 미리보기에서 해당 섹션을 잠깐 강조 */
+.preview-highlight {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 8px;
+    border: 3px solid var(--primary);
+    background: rgba(0,113,227,0.12);
+    box-shadow: 0 0 0 3px rgba(0,113,227,0.18);
+    opacity: 0;
+    z-index: 5;
+}
+.preview-highlight.show {
+    animation: previewHlPulse 1.4s ease-out forwards;
+}
+@keyframes previewHlPulse {
+    0%   { opacity: 0; transform: scale(1.04); }
+    12%  { opacity: 1; transform: scale(1); }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
 }
 #previewContainer img {
     width: 100%;
