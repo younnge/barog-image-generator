@@ -164,8 +164,21 @@ body {
 /* ── 디자인 설정 탭 ── */
 #tabDesign {
     overflow-y: auto;
-    padding: 20px 22px 28px;
-    gap: 20px;
+    padding: 10px 22px 28px;
+    gap: 16px;
+}
+/* 디자인 설정 그룹 카드 (텍스트·색상·레이아웃) */
+.design-card {
+    display: flex; flex-direction: column; gap: 14px;
+    border: 1px solid rgba(0,0,0,0.08);
+    background: rgba(0,0,0,0.015);
+    border-radius: 12px;
+    padding: 14px 14px 16px;
+}
+.design-card-title {
+    font-size: 11px; font-weight: 700; letter-spacing: .4px;
+    color: var(--text-muted);
+    margin-bottom: -4px;
 }
 
 /* ── 항목 구성 탭 ── */
