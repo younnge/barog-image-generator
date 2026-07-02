@@ -1389,6 +1389,8 @@ function priceRowGap(numSize) { return Math.round(numSize * -3 / 35); }
  * 나란히는 행 높이 numSize×1.25 안에 numSize 가격 숫자를 중앙 배치 → 위아래 (numSize×0.25)/2 만큼 보임.
  * 스택 모드 상/하 패딩을 이 값으로 맞춰 두 모드의 보이는 여백을 일치시킴(numSize 35 → 약 4px). */
 function stackPadY(numSize) { return Math.round(numSize * (MIN_ROW_H_RATIO - 1) / 2); }
+/* 세로배치(스택) 모드 항목명 상단 여백(px). stackPadY(기본 ~4px)보다 조금 여유 있게 고정 */
+const STACK_NAME_TOP = 6;
 /* 비고 텍스트와 윗 내용 사이 간격(스택 모드). 작을수록 비고가 위 내용에 붙음 */
 const NOTE_TOP_GAP = 4;
 /* 가격을 이름 우측에 나란히 둘지(false) 아래로 내릴지(스택) 판단용.
@@ -1464,10 +1466,11 @@ function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35, ro
     const PRICE_TIER_H = priceTierH(numSize), PRICE_GAP = 1;
     let rowH, priceCenterOff, nameStartOff;
     if (L.isStacked) {
-        const SPAD = stackPadY(numSize);   // 나란히 모드와 동일한 보이는 상하 여백
-        rowH = SPAD + Math.ceil(L.nameBlockH) + PRICE_GAP + L.priceTotalH + (noteH ? NOTE_TOP_GAP : SPAD) + noteH;
-        priceCenterOff = SPAD + Math.ceil(L.nameBlockH) + PRICE_GAP + PRICE_TIER_H / 2;
-        nameStartOff = SPAD + firstLineH / 2;
+        const SPAD = stackPadY(numSize);   // 하단 여백은 나란히 모드와 동일하게 유지
+        const TOP = STACK_NAME_TOP;        // 항목명 상단 여백만 조금 여유 있게(6px)
+        rowH = TOP + Math.ceil(L.nameBlockH) + PRICE_GAP + L.priceTotalH + (noteH ? NOTE_TOP_GAP : SPAD) + noteH;
+        priceCenterOff = TOP + Math.ceil(L.nameBlockH) + PRICE_GAP + PRICE_TIER_H / 2;
+        nameStartOff = TOP + firstLineH / 2;
         // 다열 행에서 더 큰 행 높이로 정렬: 스택형은 상단 기준 유지(아래 여백만 늘어남)
         if (rowHOverride != null && rowHOverride > rowH) rowH = rowHOverride;
     } else {
