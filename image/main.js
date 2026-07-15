@@ -9,6 +9,7 @@ let activeColumnTab = 'left';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
 let balanceBottomExact = false;  // 균등 맞춤 시 두 컬럼 하단을 bottomY에 정확히 일치(A토글) — 기본 OFF
 let autoFitOnePage = false;      // 한 장에 자동 맞춤: 매 렌더마다 한 페이지에 들어가는 최대 크기 자동 적용 — 기본 OFF
+let eventBoxRounded = false;      // 이벤트 박스(섹션) 모서리 둥글게 — 기본 OFF
 let manualTextScale = 100;       // 사용자가 슬라이더로 직접 설정한 전체 텍스트 크기(%) — 자동맞춤 해제 시 이 값으로 복원
 let balanceSnapshot = null;   // 균등 맞춤 켜기 직전 상태(DOM 순서·텍스트 크기) — 끌 때 원상복구용
 let balanceAutoBreak = null;  // 균등 맞춤 켤 때 자동 생성한 컬럼 구분선(끌 때 이 노드만 제거)
@@ -213,6 +214,7 @@ function getSnapshot() {
         balanced: layoutBalanced,
         bottomExact: balanceBottomExact,
         autoFit: autoFitOnePage,
+        eventBoxRounded: eventBoxRounded,
         manualTextScale: manualTextScale,
         items
     };
@@ -258,6 +260,11 @@ function restoreSnapshot(data) {
         if (cb) cb.checked = balanceBottomExact;
     }
     autoFitOnePage = false;   // '자동으로 한 장에 맞춤' 기능 제거 — 텍스트 크기는 항상 수동
+    if (data.eventBoxRounded !== undefined) {
+        eventBoxRounded = !!data.eventBoxRounded;
+        const rb = document.getElementById('eventBoxRounded');
+        if (rb) rb.checked = eventBoxRounded;
+    }
     // 사용자 수동 텍스트 크기 복원(없으면 저장된 슬라이더 값으로 폴백)
     manualTextScale = (data.manualTextScale !== undefined ? parseInt(data.manualTextScale) : parseInt(data.textScale)) || 100;
     syncOnePageUI();
@@ -1549,6 +1556,8 @@ function collectSectionRects(ctx, sections, colX, startY, maxY, colW, fonts) {
 /* A4 페이지 바깥 여백(px)·컬럼 사이 가로 간격(px) — 측정/그리기 공통, 한 곳에서만 정의 */
 const MARGIN = 41;
 const COL_GAP = 10;
+/* 이벤트 박스(섹션) 모서리 둥글게 옵션 적용 시 반경(px, 캔버스 좌표 기준) */
+const EVENT_BOX_RADIUS = 12;
 /* 섹션 사이 기본 간격(px) — 슬라이더 미설정 시 폴백 */
 const SECTION_GAP = 15;
 /* 사용자가 '왼쪽 간격' 슬라이더로 조절한 섹션 사이 세로 간격(px). 미설정 시 기본값.
@@ -1616,7 +1625,7 @@ function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify, bott
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false, rectSink = null) {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false, rectSink = null, roundedBox = false) {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -1677,7 +1686,16 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     ctx.shadowBlur = 14;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 3;
-    const fillCard = (x, yy, w, h) => { if (yy < contentBottom) ctx.fillRect(x, yy, w, Math.min(h, contentBottom - yy)); };
+    const fillCard = (x, yy, w, h) => {
+        if (yy >= contentBottom) return;
+        const ch = Math.min(h, contentBottom - yy);
+        if (roundedBox) {
+            const r = Math.min(EVENT_BOX_RADIUS, w / 2, ch / 2);
+            ctx.beginPath(); ctx.roundRect(x, yy, w, ch, r); ctx.fill();
+        } else {
+            ctx.fillRect(x, yy, w, ch);
+        }
+    };
     for (const rl of rowLayouts) {
         if (rl.type === 'full') fillCard(col1X, rl.y, fullW, rl.h);
         else {
@@ -1699,10 +1717,10 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     };
     for (const rl of rowLayouts) {
         if (rl.type === 'full') {
-            if (rl.y < contentBottom) { drawSection(ctx, rl.section, col1X, rl.y, fullW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor); recordRect(rl.section, col1X, rl.y, fullW, rl.h); }
+            if (rl.y < contentBottom) { drawSection(ctx, rl.section, col1X, rl.y, fullW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor, roundedBox); recordRect(rl.section, col1X, rl.y, fullW, rl.h); }
         } else {
-            rl.left.positions.forEach(p => { drawSection(ctx, p.sec, col1X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor); recordRect(p.sec, col1X, p.y, twoColW, p.h); });
-            rl.right.positions.forEach(p => { drawSection(ctx, p.sec, col2X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor); recordRect(p.sec, col2X, p.y, twoColW, p.h); });
+            rl.left.positions.forEach(p => { drawSection(ctx, p.sec, col1X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor, roundedBox); recordRect(p.sec, col1X, p.y, twoColW, p.h); });
+            rl.right.positions.forEach(p => { drawSection(ctx, p.sec, col2X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor, roundedBox); recordRect(p.sec, col2X, p.y, twoColW, p.h); });
         }
     }
 
@@ -1767,8 +1785,24 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
 }
 
 
-function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000') {
+function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', roundedBox = false) {
     let y = startY;
+
+    // 이벤트 박스 모서리 둥글게 옵션: 헤더는 위쪽만, 아이템 테두리는 아래쪽만 둥글게 처리
+    // (헤더+아이템이 이어질 땐 맞닿는 안쪽 모서리는 각지게 유지 → 하나의 박스처럼 보이도록)
+    const hasHeader = !!sec.title;
+    const hasItems = sec.items.length > 0;
+    // roundRect 반경 배열 순서: [좌상, 우상, 우하, 좌하]
+    const strokeRounded = (px, py, pw, ph, corners) => {
+        const r = corners.map(c => Math.max(0, Math.min(c, pw / 2, ph / 2)));
+        ctx.beginPath(); ctx.roundRect(px, py, pw, ph, r); ctx.stroke();
+    };
+    const fillRounded = (px, py, pw, ph, corners) => {
+        const r = corners.map(c => Math.max(0, Math.min(c, pw / 2, ph / 2)));
+        ctx.beginPath(); ctx.roundRect(px, py, pw, ph, r); ctx.fill();
+    };
+    // 헤더 바 모서리: 위쪽 둥글게, 아래쪽은 아이템이 이어지면 각지게
+    const hdrCorners = (rr) => [rr, rr, hasItems ? 0 : rr, hasItems ? 0 : rr];
 
     // 섹션 헤더 바
     if (sec.title) {
@@ -1776,14 +1810,17 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
         const style = sec.headerStyle || 'filled';
         if (style === 'filled') {
             ctx.fillStyle = themeColor;
-            ctx.fillRect(x, y, colW, HEADER_H);
+            if (roundedBox) fillRounded(x, y, colW, HEADER_H, hdrCorners(EVENT_BOX_RADIUS));
+            else ctx.fillRect(x, y, colW, HEADER_H);
             ctx.fillStyle = '#ffffff';
         } else {
             ctx.fillStyle = '#f8f8f8';
-            ctx.fillRect(x, y, colW, HEADER_H);
+            if (roundedBox) fillRounded(x, y, colW, HEADER_H, hdrCorners(EVENT_BOX_RADIUS));
+            else ctx.fillRect(x, y, colW, HEADER_H);
             ctx.strokeStyle = themeColor;
             ctx.lineWidth = 3;
-            ctx.strokeRect(x + 1.5, y + 1.5, colW - 3, HEADER_H - 3);
+            if (roundedBox) strokeRounded(x + 1.5, y + 1.5, colW - 3, HEADER_H - 3, hdrCorners(EVENT_BOX_RADIUS - 1.5));
+            else ctx.strokeRect(x + 1.5, y + 1.5, colW - 3, HEADER_H - 3);
             ctx.fillStyle = themeColor;
         }
         const _baseSize = sec.titleSize || 24;
@@ -1849,7 +1886,10 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
     if (sec.items.length > 0) {
         ctx.strokeStyle = hexToRgba(themeColor, 0.5);
         ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, itemsStartY, colW - 1, y - itemsStartY);
+        // 아이템 테두리 모서리: 아래쪽 둥글게, 위쪽은 헤더가 이어지면 각지게
+        const itmCorners = hasHeader ? [0, 0, EVENT_BOX_RADIUS, EVENT_BOX_RADIUS] : [EVENT_BOX_RADIUS, EVENT_BOX_RADIUS, EVENT_BOX_RADIUS, EVENT_BOX_RADIUS];
+        if (roundedBox) strokeRounded(x + 0.5, itemsStartY, colW - 1, y - itemsStartY, itmCorners);
+        else ctx.strokeRect(x + 0.5, itemsStartY, colW - 1, y - itemsStartY);
         y += 1;
     }
 
@@ -2569,7 +2609,7 @@ function generateImages() {
             }
             sectionPreviewRects = [];   // 북마크 → 미리보기 하이라이트용 섹션 위치 맵(재생성)
             const canvases = pages.map((page, pi) =>
-                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact, { page: pi, rects: sectionPreviewRects })
+                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact, { page: pi, rects: sectionPreviewRects }, eventBoxRounded)
             );
 
             generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -3515,6 +3555,12 @@ window.onload = () => {
         balanceBottomExact = e.target.checked;
         syncSectionGapUI();   // 채우기 켜짐/꺼짐에 따라 섹션 간격 슬라이더 잠금 갱신
         generateImages();
+        saveSnapshot();
+    });
+
+    document.getElementById('eventBoxRounded')?.addEventListener('change', e => {
+        eventBoxRounded = e.target.checked;
+        generateImages();     // 미리보기·내보내기 동일 렌더 경로 → 즉시 반영
         saveSnapshot();
     });
 
