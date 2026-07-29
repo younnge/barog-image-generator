@@ -1730,19 +1730,30 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
         ctx.textBaseline = 'bottom';
         const TOP_SIZE = 22;
         const titleMaxW = W - MARGIN * 2;
+        const TOP_LINE_HEIGHT = 1.28;   // 제목/기간 행간 배수 (22px 기준 ≈ 28px)
 
+        // 줄 높이 = 그 줄에서 가장 큰 글자 크기 × 배수 → 확대/축소 서식에도 행간이 비례해서 벌어짐
+        const lineH = (line) => Math.round(
+            Math.max(TOP_SIZE, ...line.chunks.map(c => c.size || TOP_SIZE)) * TOP_LINE_HEIGHT
+        );
+
+        // 여러 줄(Enter 줄바꿈 또는 자동 줄바꿈)을 baselineY 를 마지막 줄로 삼아 위로 쌓아 그림
         const drawStyledCentered = (styledLines, centerX, baselineY) => {
-            if (!styledLines.length || !styledLines[0].chunks.length) return;
-            const line = styledLines[0];
-            let lx = centerX - line.totalWidth / 2;
+            if (!styledLines.length) return;
             ctx.letterSpacing = '0px';
             ctx.textBaseline = 'bottom';
-            for (const chunk of line.chunks) {
-                ctx.font = chunk.font;
-                ctx.fillStyle = chunk.isHighlight ? hlColor : textColor;
-                ctx.textAlign = 'left';
-                ctx.fillText(chunk.text, lx, baselineY);
-                lx += chunk.width;
+            ctx.textAlign = 'left';
+            let by = baselineY;
+            for (let i = styledLines.length - 1; i >= 0; i--) {
+                const line = styledLines[i];
+                let lx = centerX - line.totalWidth / 2;
+                for (const chunk of line.chunks) {
+                    ctx.font = chunk.font;
+                    ctx.fillStyle = chunk.isHighlight ? hlColor : textColor;
+                    ctx.fillText(chunk.text, lx, by);
+                    lx += chunk.width;
+                }
+                if (i > 0) by -= lineH(styledLines[i - 1]);
             }
         };
 
@@ -3052,13 +3063,16 @@ function toggleBalanceLayout() {
 
 /* '한 번에 자동 맞춤': 좌우 2단 균형 + 위·아래 끝 맞춤 + 텍스트 크기 + 헤더 높이를
  * 한 번에 자동 계산해 결과를 슬라이더·토글에 채워 넣는다. (슬라이더는 이후 수동 조절 가능)
- * 헤더 제목은 22px 고정·1줄이라, 헤더는 '제목/기간 있으면 5%, 없으면 0%'면 충분. */
+ * 헤더 제목은 22px 고정이라 1줄이면 '제목/기간 있으면 5%, 없으면 0%'면 충분하고,
+ * 제목을 Enter 로 여러 줄 쓴 경우 늘어난 줄(약 28px ≈ 2%)만큼 헤더를 더 확보한다. */
 function autoLayoutAll() {
-    // ① 헤더 높이 자동: 헤더 텍스트(제목·기간·우측문구) 유무로 결정
-    const hasHeaderText = !!((document.getElementById('topText')?.value || '').trim()
+    // ① 헤더 높이 자동: 헤더 텍스트(제목·기간·우측문구) 유무 + 제목 줄 수로 결정
+    const topVal = (document.getElementById('topText')?.value || '').trim();
+    const hasHeaderText = !!(topVal
         || (document.getElementById('periodText')?.value || '').trim()
         || (document.getElementById('periodNote')?.value || '').trim());
-    setHeaderHeightValue(hasHeaderText ? 5 : 0);
+    const titleExtraLines = topVal ? topVal.split('\n').length - 1 : 0;
+    setHeaderHeightValue(hasHeaderText ? Math.min(55, 5 + titleExtraLines * 2) : 0);
 
     // ② 좌우 2단 균형(켜진 상태로 새로 맞춤 — 섹션이 적으면 reorderDomBalanced가 알아서 단일 유지)
     if (layoutBalanced) restoreBalanceSnapshot();   // 이전 균형 흔적(자동 구분선 등) 정리
