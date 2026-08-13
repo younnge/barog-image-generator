@@ -1,5 +1,7 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500;700;800&family=Noto+Sans+SC:wght@500;700;800&family=Noto+Sans+TC:wght@500;700;800&family=Noto+Sans+Thai:wght@500;700;800&display=swap');
+/* 굵기는 캔버스가 실제로 요청하는 값과 맞춘다 — 400(금액 단위)·500(본문)·700(제목)·800/900(굵게 1·2단계).
+   빠진 굵기가 있으면 해당 언어만 가짜 볼드로 그려져 한국어와 톤이 어긋난다. */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800;900&family=Noto+Sans+SC:wght@400;500;700;800;900&family=Noto+Sans+TC:wght@400;500;700;800;900&family=Noto+Sans+Thai:wght@400;500;700;800;900&display=swap');
 
 @font-face {
     font-family: 'GmarketSansMedium';
@@ -501,6 +503,42 @@ body {
 .gap-auto-hint { display: none; font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
 #sectionGapGroup.auto-locked .gap-auto-hint { display: block; }
 .colsplit-hint { font-size: 11px; color: var(--text-tertiary); }
+
+/* ── 옵션 세그먼트 선택(항목 구분선 · 박스 모서리) ── */
+.opt-seg-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-top: 14px;
+}
+.opt-seg-label {
+    font-size: 12px; font-weight: 600; color: var(--text-main);
+    flex: 0 0 auto; min-width: 68px;
+}
+.opt-seg {
+    display: flex; gap: 6px; flex: 1; min-width: 0;
+}
+.opt-seg-btn {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    padding: 9px 6px; min-height: 46px;
+    border: 1px solid rgba(0,0,0,0.12); border-radius: 9px;
+    background: var(--surface); color: var(--text-muted);
+    cursor: pointer; transition: all .15s ease; font-family: inherit;
+}
+.opt-seg-btn:hover { border-color: rgba(0,0,0,0.28); color: var(--text-main); }
+.opt-seg-icon { display: block; flex: 0 0 auto; }
+.opt-seg-text { font-size: 11.5px; font-weight: 600; line-height: 1; white-space: nowrap; }
+.opt-seg-hint {
+    display: block; font-size: 11px; line-height: 1.5;
+    color: var(--text-tertiary); margin: 6px 0 0 80px;
+}
+@media (max-width: 540px) { .opt-seg-hint { margin-left: 0; } }
+.opt-seg-btn.opt-seg-btn-active {
+    border-color: var(--primary); color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary) inset;
+}
+@media (max-width: 540px) {
+    .opt-seg-row { flex-direction: column; align-items: stretch; gap: 6px; }
+}
 /* 화면 하단 고정 경고 배너 — 아래쪽 항목 편집 중에도 잘림 경고가 항상 보이도록 */
 .floating-warn {
     position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%);

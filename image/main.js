@@ -4,12 +4,15 @@
 let generatedImagesUrls = [];
 let sectionPreviewRects = [];   // 렌더된 각 섹션의 미리보기 내 위치(비율) — 북마크 클릭 시 이동·하이라이트용
 let cachedBgImg = null;
+let bgFileName = '';   // 배경 이미지 파일명 — 저장/복원 시 드롭존 라벨을 원래대로 되돌리기 위해 보관
 let isBackedUp = true;
 let activeColumnTab = 'left';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
 let balanceBottomExact = false;  // 균등 맞춤 시 두 컬럼 하단을 bottomY에 정확히 일치(A토글) — 기본 OFF
 let autoFitOnePage = false;      // 한 장에 자동 맞춤: 매 렌더마다 한 페이지에 들어가는 최대 크기 자동 적용 — 기본 OFF
-let eventBoxRounded = false;      // 이벤트 박스(섹션) 모서리 둥글게 — 기본 OFF
+let boxCornerStyle = 'round';    // 이벤트 박스 모서리: 'sharp'(뾰족) | 'soft'(살짝) | 'round'(둥글게)
+let itemDividerStyle = 'solid';  // 항목 구분선: 'none' | 'dotted' | 'dashed' | 'solid'
+let docLang = 'ko';              // 문서 언어(폰트 우선순위): 'ko' | 'ja' | 'zhCN' | 'zhTW' | 'th'. 영어는 어느 값에서나 지원
 let manualTextScale = 100;       // 사용자가 슬라이더로 직접 설정한 전체 텍스트 크기(%) — 자동맞춤 해제 시 이 값으로 복원
 let balanceSnapshot = null;   // 균등 맞춤 켜기 직전 상태(DOM 순서·텍스트 크기) — 끌 때 원상복구용
 let balanceAutoBreak = null;  // 균등 맞춤 켤 때 자동 생성한 컬럼 구분선(끌 때 이 노드만 제거)
@@ -19,6 +22,9 @@ let redoHistory = [];
 const MAX_UNDO = 100;
 const SS_KEY = 'a4EventData';
 const SS_BG_KEY = 'a4BgImage';
+const SS_BG_NAME_KEY = 'a4BgName';
+const BG_LABEL_DEFAULT = '파일 선택 또는 드래그 (선택사항)';   // 배경 없을 때 드롭존 기본 문구
+const MAX_BG_NAME_LEN = 120;   // 복원한 파일명 표시 길이 상한(비정상 파일이 레이아웃을 깨뜨리지 않게)
 const SCHEMA_VERSION = 1;   // 저장 스키마 버전 — 향후 구조 변경 시 마이그레이션 분기 기준
 const MAX_RESTORE_ITEMS = 2000;   // 백업 복원 시 항목 수 상한(손상/악성 파일 DoS 방지)
 
@@ -214,7 +220,9 @@ function getSnapshot() {
         balanced: layoutBalanced,
         bottomExact: balanceBottomExact,
         autoFit: autoFitOnePage,
-        eventBoxRounded: eventBoxRounded,
+        boxCorner: boxCornerStyle,
+        itemDivider: itemDividerStyle,
+        docLang: docLang,
         manualTextScale: manualTextScale,
         items
     };
@@ -260,11 +268,11 @@ function restoreSnapshot(data) {
         if (cb) cb.checked = balanceBottomExact;
     }
     autoFitOnePage = false;   // '자동으로 한 장에 맞춤' 기능 제거 — 텍스트 크기는 항상 수동
-    if (data.eventBoxRounded !== undefined) {
-        eventBoxRounded = !!data.eventBoxRounded;
-        const rb = document.getElementById('eventBoxRounded');
-        if (rb) rb.checked = eventBoxRounded;
-    }
+    // 박스 모서리·항목 구분선·문서 언어(없던 기존 저장본은 기본값 유지)
+    if (BOX_CORNER_RADIUS[data.boxCorner] !== undefined) boxCornerStyle = data.boxCorner;
+    if (ITEM_DIVIDER_DASH[data.itemDivider] !== undefined) itemDividerStyle = data.itemDivider;
+    applyDocLang(LANG_NOTO_ORDER[data.docLang] ? data.docLang : 'ko');
+    syncOptSegUI();
     // 사용자 수동 텍스트 크기 복원(없으면 저장된 슬라이더 값으로 폴백)
     manualTextScale = (data.manualTextScale !== undefined ? parseInt(data.manualTextScale) : parseInt(data.textScale)) || 100;
     syncOnePageUI();
@@ -412,9 +420,25 @@ function saveToSessionStorage(data = null) {
         return;
     }
     if (cachedBgImg?.src?.startsWith('data:')) {
-        try { sessionStorage.setItem(SS_BG_KEY, cachedBgImg.src); }
+        try {
+            sessionStorage.setItem(SS_BG_KEY, cachedBgImg.src);
+            sessionStorage.setItem(SS_BG_NAME_KEY, bgFileName);
+        }
         catch(e) { showColorToast('배경 이미지가 너무 커 세션에 저장되지 않았습니다'); }
     }
+}
+/* 배경을 지웠을 때 세션에 남은 배경까지 비운다(새로고침 시 지운 배경이 되살아나지 않게). */
+function clearSessionBg() {
+    try { sessionStorage.removeItem(SS_BG_KEY); sessionStorage.removeItem(SS_BG_NAME_KEY); } catch(e) {}
+}
+/* 배경을 완전히 제거 — 캔버스용 이미지·드롭존 표시·세션 저장본·파일 입력값까지 한 번에.
+ * 파일 입력값을 비워야 같은 파일을 다시 골랐을 때도 change 이벤트가 발생한다. */
+function clearBackground() {
+    cachedBgImg = null;
+    hideBgThumb();
+    clearSessionBg();
+    const input = document.getElementById('bgInput');
+    if (input) input.value = '';
 }
 function restoreFromSessionStorage() {
     try {
@@ -423,9 +447,10 @@ function restoreFromSessionStorage() {
         restoreSnapshot(JSON.parse(saved));
         const bgData = sessionStorage.getItem(SS_BG_KEY);
         if (bgData) {
+            const bgName = sessionStorage.getItem(SS_BG_NAME_KEY) || '';
             const img = new Image();
-            img.onload = () => { cachedBgImg = img; showBgThumb(bgData); generateImages(); };
-            img.onerror = () => { cachedBgImg = null; hideBgThumb(); generateImages(); };   // 손상된 저장 배경은 조용히 제거
+            img.onload = () => { cachedBgImg = img; showBgThumb(bgData, bgName); generateImages(); };
+            img.onerror = () => { clearBackground(); generateImages(); };   // 손상된 저장 배경은 조용히 제거
             img.src = bgData;
         }
         return true;
@@ -1358,15 +1383,37 @@ function wrapStyledText(ctx, text, maxWidth, baseSize, isBold, fonts) {
 /* ============================================================
  * 캔버스 유틸리티
  * ============================================================ */
+/* 언어별 Noto 폰트 우선순위.
+ * 일본어·중국어 간체·번체 한자는 같은 유니코드를 공유하는데 글자 모양(획·부수)이 다르다.
+ * 캔버스는 lang 속성을 보지 않고 '코드포인트가 있는 첫 폰트'를 쓰므로, 선택한 언어의 폰트를
+ * 앞으로 보내야 그 언어의 글자 모양으로 그려진다.
+ * 한글·라틴은 Paperlogy/Pretendard 가 앞에서 처리하므로 여기서는 Noto 순서만 바꾼다. */
+const LANG_NOTO_ORDER = {
+    ko:   ['Noto Sans JP', 'Noto Sans SC', 'Noto Sans TC', 'Noto Sans Thai'],
+    ja:   ['Noto Sans JP', 'Noto Sans SC', 'Noto Sans TC', 'Noto Sans Thai'],
+    zhCN: ['Noto Sans SC', 'Noto Sans TC', 'Noto Sans JP', 'Noto Sans Thai'],
+    zhTW: ['Noto Sans TC', 'Noto Sans SC', 'Noto Sans JP', 'Noto Sans Thai'],
+    th:   ['Noto Sans Thai', 'Noto Sans JP', 'Noto Sans SC', 'Noto Sans TC']
+};
+/* 선택 언어에 맞춘 캔버스 폰트 체인. 금액 숫자(cheoeumcheoreom)는 숫자 전용이라 언어 영향 없음. */
+function buildFonts(lang) {
+    const noto = (LANG_NOTO_ORDER[lang] || LANG_NOTO_ORDER.ko).map(f => `'${f}'`).join(',');
+    return {
+        main: `'Paperlogy','Pretendard',${noto},sans-serif`,
+        bold: `'GmarketSansBold',${noto},sans-serif`,
+        medium: `'GmarketSansMedium',${noto},sans-serif`,
+        cheoeumcheoreom: "'GmarketSansBold',sans-serif"
+    };
+}
 const CONFIG = {
     W: 1240, H: 1754, SCALE: 2,
-    fonts: {
-        main: "'Paperlogy','Pretendard','Noto Sans JP','Noto Sans SC','Noto Sans TC','Noto Sans Thai',sans-serif",
-        bold: "'GmarketSansBold','Noto Sans JP','Noto Sans SC','Noto Sans TC','Noto Sans Thai',sans-serif",
-        medium: "'GmarketSansMedium','Noto Sans JP','Noto Sans SC','Noto Sans TC','Noto Sans Thai',sans-serif",
-        cheoeumcheoreom: "'GmarketSansBold',sans-serif"
-    }
+    fonts: buildFonts('ko')
 };
+/* 문서 언어 변경 — 폰트 체인을 다시 만들어 CONFIG 에 반영(이후 렌더부터 적용). */
+function applyDocLang(lang) {
+    docLang = LANG_NOTO_ORDER[lang] ? lang : 'ko';
+    CONFIG.fonts = buildFonts(docLang);
+}
 
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
@@ -1416,7 +1463,7 @@ function nameBlockHeight(lineHeights, f) {
 /* 항목 레이아웃 판정: 가격을 이름 우측에 나란히(side) vs 아래로(stack).
  * item.priceLayout 이 'side'/'stack' 이면 사용자가 고정한 값을 그대로 따름(가드 무시).
  * 미설정이면 두 레이아웃 본문 높이를 비교해 자동 선택(이름 최소폭 가드 + 더 낮은 쪽). */
-function computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize) {
+function computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize, grid = null) {
     const PAD_X = 18, PAD_Y = 12, PRICE_TIER_H = priceTierH(numSize), PRICE_ROW_GAP = priceRowGap(numSize), PRICE_GAP = 1;
     const innerW = colW - PAD_X * 2;
     const getLineH = line => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
@@ -1443,19 +1490,18 @@ function computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize) {
     // 나란히. 2·3열 좁은 칸(cols>=2)에 가격이 2개 이상이면 세로로 쌓고 하단 정렬(한 줄에 한 티어, 우측 정렬).
     // 가격 1개짜리는 쌓을 게 없으니 기존 가로 나란히(세로 중앙) 유지 → 불필요한 여백 방지.
     if (itemColCount(item) >= 2 && tiers.length >= 2) {
-        // 단위박스 우측 통일을 반영한 블록 폭 = (가장 넓은 단위박스) + 간격 + (가장 긴 금액). 라벨 없으면 단일 티어 최대폭.
-        const allLabeled = tiers.every(t => t.label);
-        const tierW = allLabeled
-            ? Math.max(...tiers.map(t => measureChipWidth(ctx, t.label, numSize, fonts))) + 10 + Math.max(...tiers.map(t => measurePriceTokensWidth(ctx, t.price, numSize, fonts)))
-            : Math.max(...tiers.map(t => measureSingleTierWidth(ctx, t, numSize, fonts)));
+        // 단위박스 우측 통일을 반영한 블록 폭 = 한 줄 한 티어짜리 열 그리드 폭(단위박스 최대 + 간격 + 금액 최대)
+        const vTierRows = tiers.map(t => [t]);                                                      // 한 티어 = 한 줄
+        const tierW = grid ? tierRowWidthInGrid(grid, 1) : computeTierGrid(ctx, vTierRows, numSize, fonts).totalW;
         const sideNameW = Math.max(innerW - tierW - STACK_SIDE_GAP, Math.floor(innerW * 0.25));
         const sideLines = wrapStyledText(ctx, item.itemName, Math.floor(sideNameW), NAME_SIZE, false, fonts);
-        const vTierRows = tiers.map(t => [t]);                                                      // 한 티어 = 한 줄
         const vPriceTotalH = tiers.length * PRICE_TIER_H + (tiers.length - 1) * PRICE_ROW_GAP;
         return { tiers, isStacked: false, sideVerticalTiers: true, nameLines: sideLines, nameBlockH: blockH(sideLines), tierRows: vTierRows, priceTotalH: vPriceTotalH };
     }
     // 가로 나란히: 이름 폭은 가격을 뺀 나머지(가격이 넓어도 이름이 사라지지 않게 최소 25% 확보)
-    const sideNameW = Math.max(innerW - priceW - STACK_SIDE_GAP, Math.floor(innerW * 0.25));
+    // 섹션 그리드가 있으면 이 줄이 차지할 열들의 폭을 예약해야 이름과 겹치지 않음
+    const sidePriceW = grid ? tierRowWidthInGrid(grid, tiers.length) : priceW;
+    const sideNameW = Math.max(innerW - sidePriceW - STACK_SIDE_GAP, Math.floor(innerW * 0.25));
     const sideLines = wrapStyledText(ctx, item.itemName, Math.floor(sideNameW), NAME_SIZE, false, fonts);
     return { tiers, isStacked: false, sideVerticalTiers: false, nameLines: sideLines, nameBlockH: blockH(sideLines), tierRows, priceTotalH };
 }
@@ -1463,11 +1509,11 @@ function computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize) {
 /* 항목 행의 높이 + 내부 오프셋(가격 중심 y·이름 시작 y, startY 기준)을 한 곳에서 계산.
  * measureItemRow(측정)와 drawItemRow(그리기)가 공유 → 두 경로의 높이 공식 분기로 인한
  * 측정/그리기 불일치(파리티 깨짐)를 원천 차단한다. */
-function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35, rowHOverride = null) {
-    if (item.isSublabel) return { isSublabel: true, rowH: sublabelLayout(ctx, item, colW, fonts, bodySize).rowH, L: null, noteH: 0, priceCenterOff: 0, nameStartOff: 0 };
+function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35, rowHOverride = null, grid = null, titleSize = 24) {
+    if (item.isSublabel) return { isSublabel: true, rowH: sublabelLayout(ctx, item, colW, fonts, bodySize, titleSize).rowH, L: null, noteH: 0, priceCenterOff: 0, nameStartOff: 0 };
     const NAME_SIZE = bodySize, PAD_Y = 12, NOTE_SIZE = Math.round(bodySize * 0.85);  // 비고 (본문 크기 연동)
     const noteH = item.note ? noteLayout(ctx, item.note, colW, NOTE_SIZE, fonts).H : 0;
-    const L = computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize);
+    const L = computeItemLayout(ctx, item, colW, fonts, NAME_SIZE, numSize, grid);
     const getLineH = line => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
     const firstLineH = L.nameLines[0] ? getLineH(L.nameLines[0]) : NAME_SIZE;
     const PRICE_TIER_H = priceTierH(numSize), PRICE_GAP = 1;
@@ -1496,8 +1542,8 @@ function itemRowGeometry(ctx, item, colW, fonts, bodySize = 20, numSize = 35, ro
     }
     return { isSublabel: false, rowH, L, noteH, priceCenterOff, nameStartOff };
 }
-function measureItemRow(ctx, item, colW, fonts, bodySize = 20, numSize = 35) {
-    return itemRowGeometry(ctx, item, colW, fonts, bodySize, numSize).rowH;
+function measureItemRow(ctx, item, colW, fonts, bodySize = 20, numSize = 35, grid = null, titleSize = 24) {
+    return itemRowGeometry(ctx, item, colW, fonts, bodySize, numSize, null, grid, titleSize).rowH;
 }
 /* 항목의 가로 칸 수 정규화(1·2·3). 소제목은 항상 1(전체폭). */
 function itemColCount(item) {
@@ -1530,17 +1576,68 @@ function packItemRows(items) {
     }
     return rows;
 }
-function measureSection(ctx, sec, colW, fonts) {
-    let h = sec.title ? (sec.titleSize || 24) + 16 : 0;
+/* 한 섹션 안에서 '같은 자리'(칸 수 + 칸 번호)에 놓인 항목들이 공유할 가격 열 그리드.
+ * 항목마다 따로 정렬하면 행이 바뀔 때 단위박스가 어긋나므로, 섹션 전체를 한 그리드로 묶어
+ * 단위박스·금액이 항목 행을 가로질러 세로 일직선에 놓이게 한다.
+ * 반환: Map<`${cols}:${칸번호}`, grid>. 그리드가 칸에 안 들어가는 그룹은 넣지 않음(항목별 정렬로 폴백). */
+function computeSectionGrids(ctx, sec, colW, fonts) {
+    const PAD_X = 18;
     const bs = sec.bodySize || 20, ns = sec.numSize || 35;
+    const groups = new Map();
     for (const grp of packItemRows(sec.items)) {
         const widths = itemColWidths(colW, grp.cols);
-        let rowH = 0;
-        grp.items.forEach((it, c) => { rowH = Math.max(rowH, measureItemRow(ctx, it, widths[c], fonts, bs, ns)); });
-        h += rowH;
+        grp.items.forEach((it, c) => {
+            if (it.isSublabel) return;
+            const L = computeItemLayout(ctx, it, widths[c], fonts, bs, ns);
+            if (!L.tiers.length) return;
+            // 실제로 그려지는 줄 구성 — 나란히 단일행이면 티어 전체가 한 줄
+            const drawnRows = (L.sideVerticalTiers || L.isStacked) ? L.tierRows : [L.tiers];
+            if (!drawnRows.length) return;
+            const key = `${grp.cols}:${c}`;
+            let g = groups.get(key);
+            if (!g) { g = { rows: [], innerW: widths[c] - PAD_X * 2, sideMaxCols: 0 }; groups.set(key, g); }
+            g.rows.push(...drawnRows);
+            // 가격이 이름 옆에 오는(나란히) 항목이 실제로 쓰는 최대 열 수 — 이름 자리를 남겨야 하는 쪽
+            if (!L.isStacked) g.sideMaxCols = Math.max(g.sideMaxCols, ...drawnRows.map(r => r.length));
+        });
     }
-    if (sec.items.length > 0) h += 1;
+    const out = new Map();
+    for (const [key, g] of groups) {
+        if (g.rows.length < 2) continue;                    // 맞출 상대가 없음 → 항목별 정렬로 충분
+        const grid = computeTierGrid(ctx, g.rows, ns, fonts);
+        if (grid.totalW > g.innerW) continue;               // 칸을 넘으면 정렬 포기
+        // 나란히 항목은 이름 최소폭(25%)을 남겨야 겹치지 않음 — 그 항목이 실제 쓰는 열까지만 따짐
+        if (g.sideMaxCols > 0 && tierRowWidthInGrid(grid, g.sideMaxCols) > Math.floor(g.innerW * 0.75)) continue;
+        out.set(key, grid);
+    }
+    return out;
+}
+/* 섹션 그리드 캐시 — 측정(measureSection)과 그리기(drawSection)가 같은 값을 쓰도록 섹션 객체에 보관.
+ * 섹션 객체는 렌더마다 parseDomToPages 가 새로 만들므로 캐시 수명은 한 번의 렌더. */
+function sectionTierGrids(ctx, sec, colW, fonts) {
+    const key = `${colW}|${sec.bodySize}|${sec.numSize}`;
+    if (sec._gridKey !== key) { sec._gridKey = key; sec._grids = computeSectionGrids(ctx, sec, colW, fonts); }
+    return sec._grids;
+}
+
+function measureSection(ctx, sec, colW, fonts) {
+    let h = sec.title ? (sec.titleSize || 24) + 16 : 0;
+    const bs = sec.bodySize || 20, ns = sec.numSize || 35, ts = sec.titleSize || 24;
+    const grids = sectionTierGrids(ctx, sec, colW, fonts);
+    const itemRows = packItemRows(sec.items);
+    for (let r = 0; r < itemRows.length; r++) {
+        const grp = itemRows[r];
+        const widths = itemColWidths(colW, grp.cols);
+        let rowH = 0;
+        grp.items.forEach((it, c) => { rowH = Math.max(rowH, measureItemRow(ctx, it, widths[c], fonts, bs, ns, grids.get(`${grp.cols}:${c}`), ts)); });
+        h += rowH + sublabelBottomPad(grp, r === itemRows.length - 1);
+    }
     return h;
+}
+/* 마지막 항목이 소제목이면 아래쪽 흰 여백(HEADER_INSET)만큼 행을 키운다.
+ * 그래야 칠해지는 띠 높이가 제목 박스와 같아지고, 띠 반경도 카드 반경과 동심원으로 맞는다. */
+function sublabelBottomPad(grp, isLastRow) {
+    return (isLastRow && grp.items[0]?.isSublabel) ? HEADER_INSET : 0;
 }
 function collectSectionRects(ctx, sections, colX, startY, maxY, colW, fonts) {
     const rects = []; let y = startY;
@@ -1556,8 +1653,49 @@ function collectSectionRects(ctx, sections, colX, startY, maxY, colW, fonts) {
 /* A4 페이지 바깥 여백(px)·컬럼 사이 가로 간격(px) — 측정/그리기 공통, 한 곳에서만 정의 */
 const MARGIN = 41;
 const COL_GAP = 10;
-/* 이벤트 박스(섹션) 모서리 둥글게 옵션 적용 시 반경(px, 캔버스 좌표 기준) */
-const EVENT_BOX_RADIUS = 12;
+/* 이벤트 박스(섹션) 모서리 반경(px, 캔버스 좌표 기준) — '박스 모서리' 선택값별 */
+const BOX_CORNER_RADIUS = { sharp: 0, soft: 10, round: 24 };
+function currentBoxRadius() {
+    const r = BOX_CORNER_RADIUS[boxCornerStyle];
+    return Number.isFinite(r) ? r : BOX_CORNER_RADIUS.round;
+}
+const HEADER_INSET = 3;   // 제목 박스를 흰 카드 안쪽으로 들여쓰는 여백(px) — 둘레에 흰 테두리 링
+/* 제목 박스가 실제로 칠해지는 세로 높이 — 섹션 헤더 영역(제목크기+16)에서 위쪽 들여쓴 만큼 뺀 값.
+ * 소제목 기본 높이를 여기에 맞춰 두 띠의 두께가 같아 보이게 한다. */
+function titleBarHeight(titleSize) { return (titleSize || 24) + 16 - HEADER_INSET; }
+/* 안쪽 띠(제목 박스·소제목 띠)가 카드 모서리를 따라갈 때 쓸 카드 반경.
+ * 띠는 자기 높이의 절반보다 큰 반경을 그릴 수 없다(canvas 가 자동으로 줄임).
+ * 카드가 그보다 둥글면 띠 반경만 잘려 모서리 쪽 흰 여백이 직선부보다 얇아 보이므로,
+ * 띠가 소화할 수 있는 만큼으로 카드 반경을 낮춰 사방 여백을 HEADER_INSET 로 일정하게 맞춘다. */
+function cardRadiusForBar(barH) {
+    return Math.max(0, Math.min(currentBoxRadius(), barH / 2 + HEADER_INSET));
+}
+/* 이 섹션 카드에 실제로 쓸 모서리 반경 — 위(제목 박스)·아래(마지막 소제목 띠) 제약 중 작은 쪽.
+ * 카드와 안쪽 띠가 같은 값을 써야 동심원이 되어 여백이 균일해진다. */
+function sectionCardRadius(sec) {
+    if (!sec) return currentBoxRadius();
+    const hasItems = (sec.items?.length || 0) > 0;
+    const barH = titleBarHeight(sec.titleSize);
+    let r = currentBoxRadius();
+    if (sec.title) r = Math.min(r, cardRadiusForBar(barH - (hasItems ? 0 : HEADER_INSET)));
+    if (hasItems && sec.items[sec.items.length - 1]?.isSublabel) r = Math.min(r, cardRadiusForBar(barH));
+    return r;
+}
+
+/* 항목 구분선 스타일별 파선 패턴(setLineDash 인자). null 이면 그리지 않음. */
+const ITEM_DIVIDER_DASH = { none: null, dotted: [1, 3], dashed: [8, 5], solid: [] };
+/* 항목 구분선 그리기 준비 — 선택된 스타일을 ctx 에 적용. '없음'이면 false(그리지 않음).
+ * 그린 뒤에는 반드시 endItemDivider 로 파선 설정을 되돌려야 다른 선에 번지지 않는다. */
+function beginItemDivider(ctx, themeColor) {
+    const dash = ITEM_DIVIDER_DASH[itemDividerStyle];
+    if (!dash) return false;
+    ctx.strokeStyle = themeColor;
+    ctx.lineWidth = itemDividerStyle === 'dotted' ? 1.2 : 0.5;
+    ctx.lineCap = itemDividerStyle === 'dotted' ? 'round' : 'butt';
+    ctx.setLineDash(dash);
+    return true;
+}
+function endItemDivider(ctx) { ctx.setLineDash([]); ctx.lineCap = 'butt'; }
 /* 섹션 사이 기본 간격(px) — 슬라이더 미설정 시 폴백 */
 const SECTION_GAP = 15;
 /* 사용자가 '왼쪽 간격' 슬라이더로 조절한 섹션 사이 세로 간격(px). 미설정 시 기본값.
@@ -1625,7 +1763,7 @@ function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify, bott
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false, rectSink = null, roundedBox = false) {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false, rectSink = null) {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -1686,21 +1824,18 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     ctx.shadowBlur = 14;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 3;
-    const fillCard = (x, yy, w, h) => {
+    // 반경은 섹션마다 계산 — 안쪽 제목/소제목 띠와 동심원이 되어야 여백이 균일하다
+    const fillCard = (sec, x, yy, w, h) => {
         if (yy >= contentBottom) return;
         const ch = Math.min(h, contentBottom - yy);
-        if (roundedBox) {
-            const r = Math.min(EVENT_BOX_RADIUS, w / 2, ch / 2);
-            ctx.beginPath(); ctx.roundRect(x, yy, w, ch, r); ctx.fill();
-        } else {
-            ctx.fillRect(x, yy, w, ch);
-        }
+        const r = Math.min(sectionCardRadius(sec), w / 2, ch / 2);
+        ctx.beginPath(); ctx.roundRect(x, yy, w, ch, r); ctx.fill();
     };
     for (const rl of rowLayouts) {
-        if (rl.type === 'full') fillCard(col1X, rl.y, fullW, rl.h);
+        if (rl.type === 'full') fillCard(rl.section, col1X, rl.y, fullW, rl.h);
         else {
-            rl.left.positions.forEach(p => fillCard(col1X, p.y, twoColW, p.h));
-            rl.right.positions.forEach(p => fillCard(col2X, p.y, twoColW, p.h));
+            rl.left.positions.forEach(p => fillCard(p.sec, col1X, p.y, twoColW, p.h));
+            rl.right.positions.forEach(p => fillCard(p.sec, col2X, p.y, twoColW, p.h));
         }
     }
     ctx.shadowColor = 'transparent';
@@ -1715,12 +1850,24 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
         const ch = Math.min(h, contentBottom - yy);
         rectSink.rects.push({ node: sec._node, page: rectSink.page, fx: x / W, fy: yy / H, fw: w / W, fh: ch / H });
     };
+    // 섹션 본문은 흰 카드와 동일한 둥근 사각형으로 클리핑한 뒤 그린다.
+    // (항목 행 배경·소제목 배경이 사각형 fillRect 라서, 클리핑하지 않으면 카드 하단
+    //  모서리의 둥근 부분을 덮어 각지게 보임)
+    const drawCard = (sec, x, yy, w, h) => {
+        if (!sec || yy >= contentBottom) return;
+        const ch = Math.min(h, contentBottom - yy);
+        const r = Math.min(sectionCardRadius(sec), w / 2, ch / 2);
+        ctx.save();
+        ctx.beginPath(); ctx.roundRect(x, yy, w, ch, r); ctx.clip();
+        drawSection(ctx, sec, x, yy, w, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor);
+        ctx.restore();
+        recordRect(sec, x, yy, w, h);
+    };
     for (const rl of rowLayouts) {
-        if (rl.type === 'full') {
-            if (rl.y < contentBottom) { drawSection(ctx, rl.section, col1X, rl.y, fullW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor, roundedBox); recordRect(rl.section, col1X, rl.y, fullW, rl.h); }
-        } else {
-            rl.left.positions.forEach(p => { drawSection(ctx, p.sec, col1X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor, roundedBox); recordRect(p.sec, col1X, p.y, twoColW, p.h); });
-            rl.right.positions.forEach(p => { drawSection(ctx, p.sec, col2X, p.y, twoColW, themeColor, numColor, fonts, hlColor, itemHlColor, labelBoxColor, roundedBox); recordRect(p.sec, col2X, p.y, twoColW, p.h); });
+        if (rl.type === 'full') drawCard(rl.section, col1X, rl.y, fullW, rl.h);
+        else {
+            rl.left.positions.forEach(p => drawCard(p.sec, col1X, p.y, twoColW, p.h));
+            rl.right.positions.forEach(p => drawCard(p.sec, col2X, p.y, twoColW, p.h));
         }
     }
 
@@ -1796,12 +1943,10 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
 }
 
 
-function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', roundedBox = false) {
+function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000') {
     let y = startY;
 
-    // 이벤트 박스 모서리 둥글게 옵션: 헤더는 위쪽만, 아이템 테두리는 아래쪽만 둥글게 처리
-    // (헤더+아이템이 이어질 땐 맞닿는 안쪽 모서리는 각지게 유지 → 하나의 박스처럼 보이도록)
-    const hasHeader = !!sec.title;
+    // 이벤트 박스 모서리 둥글게: 흰 카드는 4면 둥글게(호출부에서 처리), 제목 박스는 위쪽만 둥글게
     const hasItems = sec.items.length > 0;
     // roundRect 반경 배열 순서: [좌상, 우상, 우하, 좌하]
     const strokeRounded = (px, py, pw, ph, corners) => {
@@ -1815,33 +1960,37 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
     // 헤더 바 모서리: 위쪽 둥글게, 아래쪽은 아이템이 이어지면 각지게
     const hdrCorners = (rr) => [rr, rr, hasItems ? 0 : rr, hasItems ? 0 : rr];
 
-    // 섹션 헤더 바
+    // 섹션 헤더 바 — 흰 카드 안쪽으로 HEADER_INSET 만큼 들여 그려 둘레에 흰 테두리가 보이게.
+    // 아이템이 이어지면 아래쪽은 아이템 영역과 맞닿도록 여백 없이 각지게 유지.
     if (sec.title) {
         const HEADER_H = (sec.titleSize || 24) + 16;
         const style = sec.headerStyle || 'filled';
+        const bx = x + HEADER_INSET;
+        const by = y + HEADER_INSET;
+        const bw = colW - HEADER_INSET * 2;
+        const bh = HEADER_H - HEADER_INSET - (hasItems ? 0 : HEADER_INSET);
+        const cardR = sectionCardRadius(sec);   // 카드와 같은 기준이어야 여백이 균일
+        const bCorners = hdrCorners(cardR - HEADER_INSET);
         if (style === 'filled') {
             ctx.fillStyle = themeColor;
-            if (roundedBox) fillRounded(x, y, colW, HEADER_H, hdrCorners(EVENT_BOX_RADIUS));
-            else ctx.fillRect(x, y, colW, HEADER_H);
+            fillRounded(bx, by, bw, bh, bCorners);
             ctx.fillStyle = '#ffffff';
         } else {
             ctx.fillStyle = '#f8f8f8';
-            if (roundedBox) fillRounded(x, y, colW, HEADER_H, hdrCorners(EVENT_BOX_RADIUS));
-            else ctx.fillRect(x, y, colW, HEADER_H);
+            fillRounded(bx, by, bw, bh, bCorners);
             ctx.strokeStyle = themeColor;
             ctx.lineWidth = 3;
-            if (roundedBox) strokeRounded(x + 1.5, y + 1.5, colW - 3, HEADER_H - 3, hdrCorners(EVENT_BOX_RADIUS - 1.5));
-            else ctx.strokeRect(x + 1.5, y + 1.5, colW - 3, HEADER_H - 3);
+            strokeRounded(bx + 1.5, by + 1.5, bw - 3, bh - 3, hdrCorners(cardR - HEADER_INSET - 1.5));
             ctx.fillStyle = themeColor;
         }
         const _baseSize = sec.titleSize || 24;
         const _baseColor = style === 'filled' ? '#ffffff' : themeColor;
         const _hlColor   = style === 'filled' ? hlColor : numColor;
-        const _titleLines = wrapStyledText(ctx, sec.title, colW - 16, _baseSize, true, fonts);
+        const _titleLines = wrapStyledText(ctx, sec.title, bw - 16, _baseSize, true, fonts);
         const _line = _titleLines[0];
         if (_line && _line.chunks.length > 0) {
-            const _midY = y + HEADER_H / 2;
-            let _lx = x + colW / 2 - _line.totalWidth / 2;
+            const _midY = by + bh / 2;
+            let _lx = bx + bw / 2 - _line.totalWidth / 2;
             ctx.letterSpacing = '0px';
             ctx.textBaseline = 'middle';
             ctx.textAlign = 'left';
@@ -1856,52 +2005,43 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
     }
 
     // 아이템 행 — 항목별 가로 칸(전체폭/2열/3열) 패킹: 같은 폭 연속 항목을 한 행에 N칸으로
-    const itemsStartY = y;
-    const bs = sec.bodySize || 20, ns = sec.numSize || 35;
+    const bs = sec.bodySize || 20, ns = sec.numSize || 35, ts = sec.titleSize || 24;
     const itemRows = packItemRows(sec.items);
+    const grids = sectionTierGrids(ctx, sec, colW, fonts);   // 섹션 전체 단위박스·금액 일직선 정렬용
     for (let r = 0; r < itemRows.length; r++) {
         const grp = itemRows[r];
         const widths = itemColWidths(colW, grp.cols);
         const thisSub = !!grp.items[0]?.isSublabel;
         const nextSub = (r + 1 < itemRows.length) && !!itemRows[r + 1].items[0]?.isSublabel;
         const isLastRow = r === itemRows.length - 1;
+        const cellGrid = c => grids.get(`${grp.cols}:${c}`) || null;
         // 행 높이 = 그룹 내 항목들의 자연 높이 최대값(각자 칸 폭 기준)
-        const geos = grp.items.map((it, c) => itemRowGeometry(ctx, it, widths[c], fonts, bs, ns));
-        const rowH = Math.max(0, ...geos.map(g => g.rowH));
+        const geos = grp.items.map((it, c) => itemRowGeometry(ctx, it, widths[c], fonts, bs, ns, null, cellGrid(c), ts));
+        const rowH = Math.max(0, ...geos.map(g => g.rowH)) + sublabelBottomPad(grp, isLastRow);
         // 같은 행에서 가격 2개 이상 항목들의 가격 블록 높이 최대값(하단 정렬됨) → 단일 금액 항목을 이 블록 중앙에 맞추기 위해 전달
         const peerPriceH = Math.max(0, ...geos.filter(g => g.L && g.L.tiers && g.L.tiers.length >= 2).map(g => g.L.priceTotalH));
         // 각 칸 그리기(행 높이로 정렬, 자체 구분선은 그리지 않음 → 행 단위로 아래에서 처리)
         let cx = x;
         for (let c = 0; c < grp.items.length; c++) {
-            drawItemRow(ctx, grp.items[c], cx, y, widths[c], themeColor, numColor, itemHlColor, '#ffffff', fonts, false, bs, ns, labelBoxColor, rowH, false, peerPriceH);
+            // isLast: 구분선은 아래에서 행 단위로 그리므로 쓰이지 않고, 소제목이 섹션 맨 아래인지 판정에 쓰인다
+            drawItemRow(ctx, grp.items[c], cx, y, widths[c], themeColor, numColor, itemHlColor, '#ffffff', fonts, isLastRow, bs, ns, labelBoxColor, rowH, false, peerPriceH, cellGrid(c), ts);
             cx += widths[c];
         }
         // 칸 사이 세로 구분선
-        if (!thisSub && grp.items.length > 1) {
-            ctx.strokeStyle = themeColor; ctx.lineWidth = 0.5;
+        if (!thisSub && grp.items.length > 1 && beginItemDivider(ctx, themeColor)) {
             let vx = x;
             for (let c = 0; c < grp.items.length - 1; c++) {
                 vx += widths[c];
                 ctx.beginPath(); ctx.moveTo(vx, y + 8); ctx.lineTo(vx, y + rowH - 8); ctx.stroke();
             }
+            endItemDivider(ctx);
         }
         // 행 사이 가로 구분선 (마지막 행·소제목 인접 제외)
-        if (!thisSub && !isLastRow && !nextSub) {
-            ctx.strokeStyle = themeColor; ctx.lineWidth = 0.5;
+        if (!thisSub && !isLastRow && !nextSub && beginItemDivider(ctx, themeColor)) {
             ctx.beginPath(); ctx.moveTo(x + 18, y + rowH); ctx.lineTo(x + colW - 18, y + rowH); ctx.stroke();
+            endItemDivider(ctx);
         }
         y += rowH;
-    }
-
-    // 섹션 아이템 영역 테두리 (4면 균일)
-    if (sec.items.length > 0) {
-        ctx.strokeStyle = hexToRgba(themeColor, 0.5);
-        ctx.lineWidth = 1;
-        // 아이템 테두리 모서리: 아래쪽 둥글게, 위쪽은 헤더가 이어지면 각지게
-        const itmCorners = hasHeader ? [0, 0, EVENT_BOX_RADIUS, EVENT_BOX_RADIUS] : [EVENT_BOX_RADIUS, EVENT_BOX_RADIUS, EVENT_BOX_RADIUS, EVENT_BOX_RADIUS];
-        if (roundedBox) strokeRounded(x + 0.5, itemsStartY, colW - 1, y - itemsStartY, itmCorners);
-        else ctx.strokeRect(x + 0.5, itemsStartY, colW - 1, y - itemsStartY);
-        y += 1;
     }
 
     return y;
@@ -1909,7 +2049,7 @@ function drawSection(ctx, sec, x, startY, colW, themeColor, numColor, fonts, hlC
 
 /* 소제목 줄바꿈 레이아웃 — 측정(itemRowGeometry)·그리기(drawItemRow)가 공유해 높이를 일치시킴.
  * wrapStyledText가 수동 줄바꿈(\n)과 폭 초과 자동 줄바꿈을 모두 처리. 단일 줄이면 기존 높이 유지. */
-function sublabelLayout(ctx, item, colW, fonts, bodySize) {
+function sublabelLayout(ctx, item, colW, fonts, bodySize, titleSize = 24) {
     const PAD_X = 18;
     const base = Math.round(bodySize * 1.1);
     const lines = wrapStyledText(ctx, item.itemName, colW - PAD_X * 2, base, true, fonts);
@@ -1919,8 +2059,10 @@ function sublabelLayout(ctx, item, colW, fonts, bodySize) {
         return Math.round(maxSize * 1.28);
     });
     const contentH = lineHeights.reduce((a, b) => a + b, 0);
-    const VPAD = Math.round(bodySize * 0.4);
-    const rowH = Math.max(Math.round(bodySize * 2.2), contentH + VPAD * 2);
+    // 기본 높이는 제목 박스와 동일 — 제목 박스도 (제목크기+16)에서 HEADER_INSET 만큼 줄여 그린다.
+    // 여러 줄이거나 확대 서식으로 내용이 커지면 최소 여백을 두고 그만큼 늘어난다.
+    const VPAD = Math.round(bodySize * 0.2);
+    const rowH = Math.max(titleBarHeight(titleSize), contentH + VPAD * 2);
     return { lines, lineHeights, contentH, rowH, PAD_X };
 }
 
@@ -1938,21 +2080,33 @@ function noteLayout(ctx, note, colW, noteSize, fonts) {
     return { lines, lineHeights, H };
 }
 
-function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35, labelBoxColor = '#000000', rowHOverride = null, drawBottomDivider = true, peerPriceH = 0) {
+function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlColor, rowBg, fonts, isLast = false, bodySize = 20, numSize = 35, labelBoxColor = '#000000', rowHOverride = null, drawBottomDivider = true, peerPriceH = 0, sectionGrid = null, titleSize = 24) {
     const PAD_X = 18, PAD_Y = 12;
     const NAME_SIZE = bodySize, PRICE_SIZE = 28, NOTE_SIZE = Math.round(bodySize * 0.85);  // 비고 (본문 크기 연동)
     const getLineH = (line) => line.chunks.length ? Math.max(...line.chunks.map(c => c.size || NAME_SIZE)) : NAME_SIZE;
 
     // 소제목 행 (줄바꿈 지원 — 수동 \n·폭 초과 자동 줄바꿈)
     if (item.isSublabel) {
-        const sl = sublabelLayout(ctx, item, colW, fonts, bodySize);
+        const sl = sublabelLayout(ctx, item, colW, fonts, bodySize, titleSize);
         const SL_H = rowHOverride || sl.rowH;   // 소제목 박스 높이 (줄 수·본문 크기 연동)
+        // 제목 박스처럼 좌우를 HEADER_INSET 만큼 들여 그려 양옆에 흰 여백이 보이게.
+        // 섹션 맨 아래 항목이면 제목 박스가 아이템 없이 홀로 놓일 때와 같은 처리를 한다 —
+        // 아래쪽도 들여 흰 여백을 남기고 하단 두 모서리를 카드 모서리 반경에 맞춰 둥글게.
+        // (그 외에는 위아래로 내용이 이어지므로 각진 띠 유지)
+        const slX = x + HEADER_INSET, slW = colW - HEADER_INSET * 2;
+        const slH = SL_H - (isLast ? HEADER_INSET : 0);
         ctx.fillStyle = hexToRgba(themeColor, 0.13);
-        ctx.fillRect(x, startY, colW, SL_H);
+        if (isLast) {
+            // 카드와 같은 기준(제목 박스 높이)으로 반경을 잡아야 아래 모서리 여백이 균일해진다
+            const r = Math.max(0, Math.min(cardRadiusForBar(titleBarHeight(titleSize)) - HEADER_INSET, slW / 2, slH / 2));
+            ctx.beginPath(); ctx.roundRect(slX, startY, slW, slH, [0, 0, r, r]); ctx.fill();
+        } else {
+            ctx.fillRect(slX, startY, slW, slH);
+        }
         ctx.letterSpacing = '0px';
         ctx.textBaseline = 'middle';
         // 여러 줄을 세로 중앙 배치(줄별 높이 반영), 각 줄은 가로 중앙 정렬(넘치면 좌측 패딩)
-        let ly = startY + (SL_H - sl.contentH) / 2;
+        let ly = startY + (slH - sl.contentH) / 2;
         sl.lines.forEach((line, li) => {
             let cx = x + Math.max(sl.PAD_X, (colW - line.totalWidth) / 2);
             const cy = ly + sl.lineHeights[li] / 2;
@@ -1969,7 +2123,7 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlCol
     }
 
     // 레이아웃·높이 판정 — 측정과 동일 로직(itemRowGeometry) 공유로 측정/그리기 파리티 보장
-    const geo = itemRowGeometry(ctx, item, colW, fonts, bodySize, numSize, rowHOverride);
+    const geo = itemRowGeometry(ctx, item, colW, fonts, bodySize, numSize, rowHOverride, sectionGrid, titleSize);
     const { L, rowH, noteH } = geo;
     const { tiers, isStacked, nameLines, nameBlockH, tierRows, priceTotalH } = L;
     const lineHeights = nameLines.map(getLineH);
@@ -1985,13 +2139,12 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlCol
     ctx.fillRect(x, startY, colW, rowH);
 
     // 구분선 (양쪽 18px 여백, 마지막 항목 제외). 다열 행은 drawSection이 행 단위로 그림 → drawBottomDivider=false
-    if (drawBottomDivider && !isLast) {
-        ctx.strokeStyle = themeColor;
-        ctx.lineWidth = 0.5;
+    if (drawBottomDivider && !isLast && beginItemDivider(ctx, themeColor)) {
         ctx.beginPath();
         ctx.moveTo(x + 18, startY + rowH);
         ctx.lineTo(x + colW - 18, startY + rowH);
         ctx.stroke();
+        endItemDivider(ctx);
     }
 
     // 항목명
@@ -2020,7 +2173,7 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlCol
     if (L.sideVerticalTiers && tierRows.length > 0) {
         // 나란히 세로 티어(2개+): 하단 정렬·우측 정렬 → 칸끼리 마지막 가격 줄이 바닥에 맞음
         const priceTopY = Math.max(startY + botPad, priceBottom - priceTotalH);
-        drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP, labelBoxColor);
+        drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP, labelBoxColor, colW - PAD_X * 2, sectionGrid);
     } else if (isStacked && tierRows.length > 0) {
         // 아래로 모드. 다열: 가격 2개+ 하단 정렬, 단일 금액은 타 항목 가격 블록 중앙에 맞춤. 1열은 이름 바로 아래.
         const belowName = startY + botPad + Math.ceil(nameBlockH) + PRICE_GAP;
@@ -2030,11 +2183,11 @@ function drawItemRow(ctx, item, x, startY, colW, themeColor, numColor, itemHlCol
             else if (peerPriceH > 0) priceTopY = Math.max(belowName, peerCenterY - priceTotalH / 2);      // 단일 + 2가격 peer 있음 → peer 블록 중앙
             else priceTopY = Math.max(belowName, priceBottom - priceTotalH);                              // 단일 + peer 없음(전부 단일) → 하단 정렬
         }
-        drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP, labelBoxColor);
+        drawPriceTierRows(ctx, tierRows, priceRightX, priceTopY, themeColor, numColor, fonts, numSize, PRICE_TIER_H, PRICE_ROW_GAP, labelBoxColor, colW - PAD_X * 2, sectionGrid);
     } else {
         // 나란히 단일 금액: 다열이고 다중가격 peer가 있으면 그 블록 중앙에 맞춤(없으면 기존 행 중앙)
         const cy = (itemColCount(item) >= 2 && peerPriceH > 0) ? peerCenterY : priceCenterY;
-        drawPriceTiers(ctx, item, priceRightX, cy, themeColor, numColor, PRICE_SIZE, fonts, numSize, labelBoxColor);
+        drawPriceTiers(ctx, item, priceRightX, cy, themeColor, numColor, PRICE_SIZE, fonts, numSize, labelBoxColor, sectionGrid);
     }
 
     // 비고 텍스트 (우하단 작은 글씨) — 줄바꿈·서식(강조·확대·축소·굵게) 지원, 우측 정렬
@@ -2118,24 +2271,54 @@ function measurePriceTiersWidth(ctx, tiers, numSize, fonts) {
     return tiers.reduce((sum, t, i) => sum + measureSingleTierWidth(ctx, t, numSize, fonts) + (i < tiers.length - 1 ? TIER_GAP : 0), 0);
 }
 
-function packTierRows(ctx, tiers, maxW, numSize, fonts) {
+/* 여러 줄로 놓인 가격 티어를 '우측 기준 열 그리드'로 정렬하기 위한 열 폭 계산.
+ * 열 번호 j 는 오른쪽에서 0부터. 한 열 = (그 열에서 가장 넓은 단위박스) + 10 + (가장 긴 금액).
+ * → 줄마다 티어 수·숫자 폭이 달라도 금액 우측과 단위박스 우측이 세로로 일직선에 놓인다.
+ * 반환: { cols: [{ chipW, priceW, totalW }], totalW } (totalW 는 열 사이 간격 포함한 전체 폭) */
+function computeTierGrid(ctx, tierRows, numSize, fonts) {
     const TIER_GAP = 14;
-    // 4개일 때 2×2 강제
+    const nCols = Math.max(...tierRows.map(r => r.length));
+    const cols = Array.from({ length: nCols }, () => ({ chipW: 0, priceW: 0, totalW: 0 }));
+    for (const row of tierRows) {
+        for (let i = 0; i < row.length; i++) {
+            const col = cols[row.length - 1 - i];   // 오른쪽에서 센 열 번호
+            col.chipW = Math.max(col.chipW, measureChipWidth(ctx, row[i].label, numSize, fonts));
+            col.priceW = Math.max(col.priceW, measurePriceTokensWidth(ctx, row[i].price, numSize, fonts));
+        }
+    }
+    let totalW = 0;
+    cols.forEach((col, j) => {
+        col.totalW = col.chipW + (col.chipW > 0 ? 10 : 0) + col.priceW;
+        totalW += col.totalW + (j > 0 ? TIER_GAP : 0);
+    });
+    return { cols, totalW };
+}
+
+/* 그리드에서 티어 n개짜리 한 줄이 차지하는 폭(오른쪽에서 n개 열 + 그 사이 간격). */
+function tierRowWidthInGrid(grid, n) {
+    const TIER_GAP = 14;
+    let w = 0;
+    for (let j = 0; j < n && j < grid.cols.length; j++) w += grid.cols[j].totalW + (j > 0 ? TIER_GAP : 0);
+    return w;
+}
+
+function packTierRows(ctx, tiers, maxW, numSize, fonts) {
+    // 4개는 2×2 가 보기 좋지만, 좁은 칸(3열 등)에서는 넘쳐 잘리므로 들어갈 때만 적용
     if (tiers.length === 4) {
-        return [tiers.slice(0, 2), tiers.slice(2, 4)];
+        const twoByTwo = [tiers.slice(0, 2), tiers.slice(2, 4)];
+        if (computeTierGrid(ctx, twoByTwo, numSize, fonts).totalW <= maxW) return twoByTwo;
+        // 안 들어가면 아래 일반 패킹으로 → 폭에 맞춰 한 줄에 하나씩 쌓임
     }
     // 역방향으로 채워서 뒤집으면 첫 행이 적고 마지막 행이 많은 하단 집중 배치가 됨 (5개 → 2+3)
+    // 폭 판정은 실제 그리기와 같은 열 그리드 기준 — 단위박스 우측 정렬로 넓어진 폭까지 반영해 넘침 방지.
     const reversed = [...tiers].reverse();
     const rows = [[]];
-    let rowW = 0;
     for (const tier of reversed) {
-        const tw = measureSingleTierWidth(ctx, tier, numSize, fonts);
-        const addW = rows[rows.length - 1].length > 0 ? tw + TIER_GAP : tw;
-        if (rows[rows.length - 1].length > 0 && rowW + addW > maxW) {
-            rows.push([tier]); rowW = tw;
-        } else {
-            rows[rows.length - 1].push(tier); rowW += addW;
-        }
+        const cur = rows[rows.length - 1];
+        if (cur.length === 0) { cur.push(tier); continue; }
+        cur.push(tier);
+        const grid = computeTierGrid(ctx, rows.map(r => [...r].reverse()), numSize, fonts);
+        if (grid.totalW > maxW) { cur.pop(); rows.push([tier]); }
     }
     return rows.filter(r => r.length > 0).reverse().map(row => row.reverse());
 }
@@ -2154,8 +2337,9 @@ function tokenizePriceText(str) {
 }
 
 /* 한 행의 가격 티어들을 rightX 기준 우→좌로 그림(숫자 시각 중앙을 centerY에 정렬).
- * 단일행(drawPriceTiers)·다행(drawPriceTierRows) 양쪽이 공유. */
-function drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labelBoxColor, chipRightX = null) {
+ * 단일행(drawPriceTiers)·다행(drawPriceTierRows) 양쪽이 공유.
+ * grid(computeTierGrid 결과)를 주면 티어를 열 그리드에 맞춰 배치 — 줄이 달라도 금액·단위박스가 우측 정렬로 일직선. */
+function drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labelBoxColor, grid = null) {
     const NUM_SIZE = numSize, UNIT_SIZE = Math.round(numSize * 0.49), CHIP_LABEL_SIZE = Math.round(numSize * 0.37);  // 라벨 칩 (금액 크기 연동)
     const CHIP_H = Math.round(CHIP_LABEL_SIZE * 2);
     const TIER_GAP = 14;
@@ -2166,10 +2350,21 @@ function drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labe
     const _nm = ctx.measureText('0');
     const baselineY = centerY + (_nm.actualBoundingBoxAscent - _nm.actualBoundingBoxDescent) / 2;
 
+    // 열 그리드의 각 열 우측 경계(오른쪽에서 0번). 금액은 여기에 우측 정렬, 단위박스는 열의 최대 금액폭만큼 더 왼쪽.
+    if (grid && grid.cols.length < tiers.length) grid = null;   // 이 줄을 못 담는 그리드는 무시(안전장치)
+    let colRight = null;
+    if (grid) {
+        colRight = [];
+        let r = rightX;
+        for (let j = 0; j < grid.cols.length; j++) { colRight[j] = r; r -= grid.cols[j].totalW + TIER_GAP; }
+    }
+
     let x = rightX;
     ctx.letterSpacing = '-1.5px';
     for (let i = tiers.length - 1; i >= 0; i--) {
         const tier = tiers[i];
+        const col = grid ? grid.cols[tiers.length - 1 - i] : null;
+        if (col) x = colRight[tiers.length - 1 - i];
         if (tier.price) {
             const tokens = tokenizePriceText(tier.price);
             let px = x;
@@ -2190,8 +2385,8 @@ function drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labe
             ctx.font = `500 ${CHIP_LABEL_SIZE}px ${fonts.medium}`;
             const lw = ctx.measureText(tier.label).width;
             const chipW = lw + 18;
-            // 세로 스택 시 단위박스 우측 경계를 긴 금액 기준으로 통일(chipRightX). 그 외엔 금액 바로 왼쪽(x).
-            const chipRightEdge = (chipRightX != null && tiers.length === 1) ? chipRightX : x;
+            // 그리드 정렬 시 단위박스 우측 경계는 열의 최대 금액폭 기준으로 통일. 그 외엔 금액 바로 왼쪽(x).
+            const chipRightEdge = col ? colRight[tiers.length - 1 - i] - col.priceW - 10 : x;
             const chipX = chipRightEdge - chipW;
             ctx.fillStyle = labelBoxColor;
             roundRect(ctx, chipX, centerY - CHIP_H / 2, chipW, CHIP_H, CHIP_H / 2);
@@ -2204,24 +2399,24 @@ function drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labe
     }
 }
 
-function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSize, fonts, numSize = 35, labelBoxColor = '#000000') {
+function drawPriceTiers(ctx, item, rightX, centerY, themeColor, numColor, fontSize, fonts, numSize = 35, labelBoxColor = '#000000', sectionGrid = null) {
     const tiers = buildTiers(item);
     if (!tiers.length) return;
-    drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labelBoxColor);
+    drawTierRow(ctx, tiers, rightX, centerY, numColor, fonts, numSize, labelBoxColor, sectionGrid);
 }
 
-function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fonts, numSize, TIER_H = 35, ROW_GAP = 6, labelBoxColor = '#000000') {
-    // 세로 스택(한 줄에 한 티어, 모두 라벨 있음)일 때 단위박스 우측 경계를 통일:
-    // 가장 긴 금액 폭 기준으로 단위박스를 우측 정렬 → 금액은 우측(rightX) 정렬 유지, 단위박스 일직선.
-    let chipRightX = null;
-    if (tierRows.length > 1 && tierRows.every(r => r.length === 1 && r[0].label)) {
-        let maxPriceW = 0;
-        for (const r of tierRows) maxPriceW = Math.max(maxPriceW, measurePriceTokensWidth(ctx, r[0].price, numSize, fonts));
-        chipRightX = rightX - maxPriceW - 10;
+function drawPriceTierRows(ctx, tierRows, rightX, topY, themeColor, numColor, fonts, numSize, TIER_H = 35, ROW_GAP = 6, labelBoxColor = '#000000', maxW = Infinity, sectionGrid = null) {
+    // 가격이 위아래 여러 줄로 놓이면 열 그리드로 정렬 — 숫자 폭이 달라도 금액·단위박스가 우측 기준 일직선.
+    // 섹션 그리드가 주어지면(항목끼리도 일직선) 그것을 우선 사용. 없으면 이 항목만으로 그리드를 만든다.
+    // 그리드 폭이 칸 폭을 넘으면(4개 2×2 강제 등) 정렬을 포기하고 기존 우측 흐름 배치로 폴백.
+    let grid = sectionGrid;
+    if (!grid && tierRows.length > 1) {
+        const g = computeTierGrid(ctx, tierRows, numSize, fonts);
+        if (g.totalW <= maxW) grid = g;
     }
     for (let ri = 0; ri < tierRows.length; ri++) {
         const centerY = topY + ri * (TIER_H + ROW_GAP) + TIER_H / 2;
-        drawTierRow(ctx, tierRows[ri], rightX, centerY, numColor, fonts, numSize, labelBoxColor, chipRightX);
+        drawTierRow(ctx, tierRows[ri], rightX, centerY, numColor, fonts, numSize, labelBoxColor, grid);
     }
 }
 
@@ -2528,6 +2723,20 @@ function syncOnePageUI() {
     document.getElementById('textScaleGroup')?.classList.toggle('auto-locked', autoFitOnePage);
 }
 
+/* 세그먼트 선택(항목 구분선·박스 모서리) 버튼의 활성 표시를 현재 상태에 맞춘다. */
+function syncOptSegUI() {
+    const sync = (segId, val) => {
+        document.getElementById(segId)?.querySelectorAll('.opt-seg-btn').forEach(btn => {
+            const on = btn.dataset.val === val;
+            btn.classList.toggle('opt-seg-btn-active', on);
+            btn.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
+    };
+    sync('itemDividerSeg', itemDividerStyle);
+    sync('boxCornerSeg', boxCornerStyle);
+    sync('docLangSeg', docLang);
+}
+
 /* '섹션 간격' UI 동기화: 균등/자동 맞춤이 켜지면 간격이 자동 분배되므로 슬라이더를 잠가 혼동을 막는다. */
 function syncSectionGapUI() {
     // 간격이 자동 분배되는 경우는 '페이지 끝까지 채우기'가 켜졌을 때뿐 → 그때만 잠금.
@@ -2620,7 +2829,7 @@ function generateImages() {
             }
             sectionPreviewRects = [];   // 북마크 → 미리보기 하이라이트용 섹션 위치 맵(재생성)
             const canvases = pages.map((page, pi) =>
-                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact, { page: pi, rects: sectionPreviewRects }, eventBoxRounded)
+                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact, { page: pi, rects: sectionPreviewRects })
             );
 
             generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -2802,6 +3011,43 @@ function loadColorSlots() {
     return [];
 }
 function saveColorSlots(slots) { localStorage.setItem('a4ColorSlots', JSON.stringify(slots)); }
+
+/* ── 커스텀 저장 색상 팔레트의 백업 포함 ──
+ * 팔레트는 localStorage 에만 있어 백업 파일만 옮기면 다른 PC·브라우저에서 사라진다.
+ * 그래서 저장할 때 파일에 함께 담고, 불러올 때 되돌려 놓는다.
+ * (Undo/Redo·세션 저장에는 넣지 않음 — 팔레트는 작업물이 아니라 브라우저 설정이므로) */
+const THEME_COLOR_SLOT_KEY = 'a4ColorSlots';
+function colorSlotKeys() {
+    return [THEME_COLOR_SLOT_KEY, ...Object.values(MINI_PRESET_META).map(m => m.storageKey)];
+}
+/* 현재 팔레트 전체를 { localStorage 키: [색상…] } 로 수집. 비어 있는 키는 넣지 않음. */
+function collectColorSlots() {
+    const out = {};
+    for (const key of colorSlotKeys()) {
+        const slots = loadMiniSlots(key);   // 검증(6개 이하·#RRGGBB)이 같아 그대로 재사용
+        if (slots.length) out[key] = slots;
+    }
+    return out;
+}
+/* 백업에서 읽은 팔레트를 localStorage 에 반영하고 프리셋 UI를 다시 그린다.
+ * 모르는 키·형식이 틀린 값은 무시(손상·악의적 파일 방어). 반영된 게 있으면 true. */
+function applyColorSlots(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    const valid = new Set(colorSlotKeys());
+    let changed = false;
+    for (const [key, slots] of Object.entries(data)) {
+        if (!valid.has(key)) continue;
+        if (!Array.isArray(slots) || slots.length > 6 || !slots.every(c => typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c))) continue;
+        try { localStorage.setItem(key, JSON.stringify(slots)); changed = true; } catch (e) {}
+    }
+    if (changed) renderAllColorPresets();
+    return changed;
+}
+/* 테마 프리셋 + 미니 슬롯 5종을 한 번에 다시 그림(최초 로드·백업 복원 공용). */
+function renderAllColorPresets() {
+    renderColorPresets();
+    Object.keys(MINI_PRESET_META).forEach(renderMiniColorPresets);
+}
 function renderColorPresets() {
     const container = document.getElementById('colorPresets');
     if (!container) return;
@@ -2892,17 +3138,27 @@ function updateSliderBg(slider) {
 /* ============================================================
  * 배경 이미지 표시
  * ============================================================ */
-function showBgThumb(src) {
+/* 배경 썸네일·파일명·드롭존 상태를 한 번에 반영. name 을 주면 파일명 라벨까지 복원한다
+ * (불러오기·세션 복원에서도 처음 선택했을 때와 같은 모습이 되도록). */
+function showBgThumb(src, name = bgFileName) {
     const thumb = document.getElementById('bgThumb');
     if (thumb) { thumb.src = src; thumb.classList.add('visible'); }
     const sub = document.getElementById('fileLabelSub');
     if (sub) sub.textContent = '배경 이미지 로드됨';
+    bgFileName = String(name || '').slice(0, MAX_BG_NAME_LEN);
+    const main = document.getElementById('fileLabelMain');
+    if (main) main.textContent = bgFileName || BG_LABEL_DEFAULT;
+    document.getElementById('dropZone')?.classList.add('file-attached');
 }
 function hideBgThumb() {
     const thumb = document.getElementById('bgThumb');
     if (thumb) { thumb.src = ''; thumb.classList.remove('visible'); }
     const sub = document.getElementById('fileLabelSub');
     if (sub) sub.textContent = '';
+    bgFileName = '';
+    const main = document.getElementById('fileLabelMain');
+    if (main) main.textContent = BG_LABEL_DEFAULT;
+    document.getElementById('dropZone')?.classList.remove('file-attached');
 }
 
 /* ============================================================
@@ -2922,7 +3178,11 @@ function saveProject() {
     const data = getSnapshot();
     if (cachedBgImg?.src?.startsWith('data:')) {
         data.bgImage = cachedBgImg.src;
+        if (bgFileName) data.bgName = bgFileName;   // 파일명까지 담아 드롭존 표시를 그대로 복원
     }
+    // 커스텀 저장 색상 팔레트도 함께 담아 다른 PC에서 열어도 유지되게
+    const slots = collectColorSlots();
+    if (Object.keys(slots).length) data.colorSlots = slots;
     const now = new Date();
     const dateStr = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
     const timeStr = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
@@ -2938,15 +3198,21 @@ function loadProject(event) {
     reader.onload = e => {
         try {
             const data = JSON.parse(e.target.result);
+            applyColorSlots(data.colorSlots);   // 팔레트 먼저 — 이후 프리셋 렌더가 새 슬롯을 반영하도록
             restoreSnapshot(data);
+            const bgInput = document.getElementById('bgInput');
+            if (bgInput) bgInput.value = '';   // 이전 선택 파일 해제 — 같은 파일을 다시 골라도 change 가 뜨도록
+            // 배경도 저장 시점 상태와 정확히 일치시킨다 — 백업에 있으면 그 배경으로,
+            // 없었으면(저장 당시 배경 없음) 현재 배경을 비운다.
             if (data.bgImage) {
                 const img = new Image();
-                img.onload = () => { cachedBgImg = img; showBgThumb(data.bgImage); generateImages(); markSaved(); };
-                img.onerror = () => { showColorToast('배경 이미지를 복원하지 못했습니다. 데이터 본문은 정상 적용됐습니다.'); generateImages(); markSaved(); };
+                img.onload = () => { cachedBgImg = img; showBgThumb(data.bgImage, data.bgName); generateImages(); markSaved(); };
+                img.onerror = () => { clearBackground(); showColorToast('배경 이미지를 복원하지 못했습니다. 데이터 본문은 정상 적용됐습니다.'); generateImages(); markSaved(); };
                 img.src = data.bgImage;
                 showColorToast('불러오기 완료. 배경 이미지도 함께 복원되었습니다.');
             } else {
-                showColorToast('불러오기 완료. 배경 이미지는 별도로 다시 선택해 주세요.');
+                clearBackground();
+                showColorToast('불러오기 완료. 저장 당시 배경이 없어 배경을 비웠습니다.');
                 generateImages();
                 markSaved();
             }
@@ -3488,14 +3754,14 @@ window.onload = () => {
     // 배경 이미지
     const bgInput = document.getElementById('bgInput');
     bgInput.addEventListener('change', e => {
-        if (!e.target.files?.length) { cachedBgImg = null; hideBgThumb(); debouncedGenerateImages(); return; }
+        if (!e.target.files?.length) { clearBackground(); debouncedGenerateImages(); return; }
         const file = e.target.files[0];
         if (file.size > 20 * 1024 * 1024) { showColorToast('이미지 파일 크기는 20MB 이하로 선택해 주세요.'); e.target.value = ''; return; }
         saveSnapshot();
         const reader = new FileReader();
         reader.onload = ev => {
             const img = new Image();
-            img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result); debouncedGenerateImages(); };
+            img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result, file.name); debouncedGenerateImages(); };
             img.onerror = () => showColorToast('이미지를 불러오지 못했습니다. 다른 파일을 선택해 주세요.');
             img.src = ev.target.result;
         };
@@ -3515,7 +3781,7 @@ window.onload = () => {
         const reader = new FileReader();
         reader.onload = ev => {
             const img = new Image();
-            img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result); debouncedGenerateImages(); };
+            img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result, file.name); debouncedGenerateImages(); };
             img.onerror = () => showColorToast('이미지를 불러오지 못했습니다. 다른 파일을 선택해 주세요.');
             img.src = ev.target.result;
         };
@@ -3572,11 +3838,30 @@ window.onload = () => {
         saveSnapshot();
     });
 
-    document.getElementById('eventBoxRounded')?.addEventListener('change', e => {
-        eventBoxRounded = e.target.checked;
-        generateImages();     // 미리보기·내보내기 동일 렌더 경로 → 즉시 반영
-        saveSnapshot();
+    // 항목 구분선 / 박스 모서리 — 세그먼트 선택. 미리보기·내보내기가 같은 렌더 경로라 즉시 반영된다.
+    const bindOptSeg = (segId, apply) => {
+        document.getElementById(segId)?.addEventListener('click', e => {
+            const btn = e.target.closest('.opt-seg-btn');
+            if (!btn || !btn.dataset.val) return;
+            if (!apply(btn.dataset.val)) return;   // 같은 값이면 재렌더 생략
+            syncOptSegUI();
+            generateImages();
+            saveSnapshot();
+        });
+    };
+    bindOptSeg('itemDividerSeg', v => {
+        if (ITEM_DIVIDER_DASH[v] === undefined || v === itemDividerStyle) return false;
+        itemDividerStyle = v; return true;
     });
+    bindOptSeg('boxCornerSeg', v => {
+        if (BOX_CORNER_RADIUS[v] === undefined || v === boxCornerStyle) return false;
+        boxCornerStyle = v; return true;
+    });
+    bindOptSeg('docLangSeg', v => {
+        if (LANG_NOTO_ORDER[v] === undefined || v === docLang) return false;
+        applyDocLang(v); return true;   // 폰트 체인 교체 → 이어지는 generateImages 부터 반영
+    });
+    syncOptSegUI();
 
     // itemsContainer 이벤트 위임
     const container = document.getElementById('itemsContainer');
@@ -3816,12 +4101,7 @@ window.onload = () => {
     });
 
     // 색상 프리셋
-    renderColorPresets();
-    renderMiniColorPresets('numColorPresets');
-    renderMiniColorPresets('textColorPresets');
-    renderMiniColorPresets('hlColorPresets');
-    renderMiniColorPresets('itemHlColorPresets');
-    renderMiniColorPresets('labelBoxColorPresets');
+    renderAllColorPresets();
     initMiniPresetHandlers();
     document.getElementById('colorPresets')?.addEventListener('click', e => {
         // 빌트인 프리셋 카드

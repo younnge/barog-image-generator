@@ -60,13 +60,6 @@
                         </label>
                         <input type="file" id="bgInput" accept="image/*">
                     </div>
-                    <label class="toggle-row" id="eventBoxRoundedRow" title="이벤트 박스(섹션)의 모서리를 둥글게 표시합니다.">
-                        <span class="switch"><input type="checkbox" id="eventBoxRounded"><span class="track"></span></span>
-                        <span class="toggle-text">
-                            <span class="toggle-label">이벤트 박스 모서리 둥글게</span>
-                            <span class="toggle-desc">섹션 박스 모서리를 둥근 형태로 표시</span>
-                        </span>
-                    </label>
                 </div>
 
                 <div class="design-card">
@@ -107,6 +100,109 @@
                             </div>
                         </div>
                     </div>
+                </div>
+                </div>
+
+                <div class="design-card">
+                <div class="design-card-title">레이아웃</div>
+                <div class="design-2col">
+                    <div class="design-group">
+                        <div class="label-with-tip">
+                            <span class="label-text">헤더 높이</span>
+                            <span class="label-tip-wrap"><input type="number" id="headerHeightLabel" class="label-tip-input" min="0" max="55" step="1" value="5"><span class="label-tip-unit">%</span></span>
+                        </div>
+                        <input type="range" id="headerHeight" min="0" max="55" value="5" step="1" class="slider-input">
+                    </div>
+
+                    <div class="design-group" id="textScaleGroup">
+                        <div class="label-with-tip">
+                            <span class="label-text">전체 텍스트 크기</span>
+                            <span class="label-tip-wrap"><input type="number" id="textScaleLabel" class="label-tip-input" min="70" max="150" step="1" value="100"><span class="label-tip-unit">%</span></span>
+                        </div>
+                        <input type="range" id="textScale" min="70" max="150" value="100" step="1" class="slider-input">
+                    </div>
+                </div>
+
+                <div id="sectionGapGroup">
+                    <div class="design-2col">
+                        <div class="design-group">
+                            <div class="label-with-tip">
+                                <span class="label-text">좌측 간격</span>
+                                <span class="label-tip-wrap"><input type="number" id="sectionGapLabel" class="label-tip-input" min="0" max="60" step="1" value="15"><span class="label-tip-unit">px</span></span>
+                            </div>
+                            <input type="range" id="sectionGap" min="0" max="60" value="15" step="1" class="slider-input">
+                        </div>
+                        <div class="design-group">
+                            <div class="label-with-tip">
+                                <span class="label-text">우측 간격</span>
+                                <span class="label-tip-wrap"><input type="number" id="sectionGapRightLabel" class="label-tip-input" min="0" max="60" step="1" value="15"><span class="label-tip-unit">px</span></span>
+                            </div>
+                            <input type="range" id="sectionGapRight" min="0" max="60" value="15" step="1" class="slider-input">
+                        </div>
+                    </div>
+                    <span class="gap-auto-hint" id="sectionGapHint">‘페이지 끝까지 채우기’가 켜져 있어 간격이 자동 분배됩니다 — 끄면 직접 조절할 수 있어요</span>
+                </div>
+
+                <div class="opt-seg-row">
+                    <span class="opt-seg-label">언어</span>
+                    <div class="opt-seg" id="docLangSeg" role="radiogroup" aria-label="문서 언어">
+                        <button type="button" class="opt-seg-btn" data-val="ko" role="radio" aria-checked="false" title="한국어 (영어 포함)"><span class="opt-seg-text">한국어</span></button>
+                        <button type="button" class="opt-seg-btn" data-val="ja" role="radio" aria-checked="false" title="일본어 — 한자를 일본식 글자 모양으로"><span class="opt-seg-text">일본어</span></button>
+                        <button type="button" class="opt-seg-btn" data-val="zhCN" role="radio" aria-checked="false" title="중국어 간체 — 한자를 간체 글자 모양으로"><span class="opt-seg-text">중국어</span></button>
+                        <button type="button" class="opt-seg-btn" data-val="zhTW" role="radio" aria-checked="false" title="대만 번체 — 한자를 번체 글자 모양으로"><span class="opt-seg-text">대만</span></button>
+                        <button type="button" class="opt-seg-btn" data-val="th" role="radio" aria-checked="false" title="태국어"><span class="opt-seg-text">태국어</span></button>
+                    </div>
+                </div>
+                <span class="opt-seg-hint">한자는 언어마다 글자 모양이 달라, 주로 쓰는 언어를 골라야 그 언어의 모양으로 그려집니다. 영어는 어느 설정에서나 지원됩니다.</span>
+
+                <div class="opt-seg-row">
+                    <span class="opt-seg-label">항목 구분선</span>
+                    <div class="opt-seg" id="itemDividerSeg" role="radiogroup" aria-label="항목 구분선">
+                        <button type="button" class="opt-seg-btn" data-val="none" role="radio" aria-checked="false" title="항목 사이 구분선을 그리지 않음">
+                            <span class="opt-seg-text">없음</span>
+                        </button>
+                        <button type="button" class="opt-seg-btn" data-val="dotted" role="radio" aria-checked="false" title="점선">
+                            <svg class="opt-seg-icon" width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><line x1="2" y1="4" x2="36" y2="4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 4"/></svg>
+                            <span class="opt-seg-text">점선</span>
+                        </button>
+                        <button type="button" class="opt-seg-btn" data-val="dashed" role="radio" aria-checked="false" title="긴 파선">
+                            <svg class="opt-seg-icon" width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><line x1="2" y1="4" x2="36" y2="4" stroke="currentColor" stroke-width="1.6" stroke-dasharray="8 5"/></svg>
+                            <span class="opt-seg-text">긴 파선</span>
+                        </button>
+                        <button type="button" class="opt-seg-btn" data-val="solid" role="radio" aria-checked="false" title="실선">
+                            <svg class="opt-seg-icon" width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><line x1="2" y1="4" x2="36" y2="4" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <span class="opt-seg-text">실선</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="opt-seg-row">
+                    <span class="opt-seg-label">박스 모서리</span>
+                    <div class="opt-seg" id="boxCornerSeg" role="radiogroup" aria-label="박스 모서리">
+                        <button type="button" class="opt-seg-btn" data-val="sharp" role="radio" aria-checked="false" title="모서리를 각지게">
+                            <svg class="opt-seg-icon" width="34" height="20" viewBox="0 0 34 20" aria-hidden="true"><rect x="1.5" y="2.5" width="31" height="15" rx="0" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <span class="opt-seg-text">뾰족하게</span>
+                        </button>
+                        <button type="button" class="opt-seg-btn" data-val="soft" role="radio" aria-checked="false" title="모서리를 살짝 둥글게">
+                            <svg class="opt-seg-icon" width="34" height="20" viewBox="0 0 34 20" aria-hidden="true"><rect x="1.5" y="2.5" width="31" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <span class="opt-seg-text">살짝</span>
+                        </button>
+                        <button type="button" class="opt-seg-btn" data-val="round" role="radio" aria-checked="false" title="모서리를 둥글게">
+                            <svg class="opt-seg-icon" width="34" height="20" viewBox="0 0 34 20" aria-hidden="true"><rect x="1.5" y="2.5" width="31" height="15" rx="7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <span class="opt-seg-text">둥글게</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="balance-row">
+                    <button class="btn-toggle-all btn-balance-full btn-balance-half" id="btnBalance" aria-pressed="false" title="섹션 내용을 좌·우 컬럼에 높이가 비슷하도록 나눕니다 (텍스트 크기·섹션 간격은 그대로 유지)">양쪽 높이 맞추기</button>
+                    <label class="toggle-row toggle-sub bottom-exact-inline" id="bottomExactRow" title="켜면 두 컬럼 하단을 페이지 끝에 정확히 맞춥니다. «양쪽 높이 맞추기»가 켜져 있을 때만 적용됩니다.">
+                        <span class="switch"><input type="checkbox" id="balanceBottomExact"><span class="track"></span></span>
+                        <span class="toggle-text">
+                            <span class="toggle-label">페이지 끝까지 채우기</span>
+                            <span class="toggle-desc">좌우 칸 아래 끝을 페이지 끝에 맞춤</span>
+                        </span>
+                    </label>
                 </div>
                 </div>
 
@@ -190,58 +286,6 @@
                     </div>
                 </div>
 
-                </div>
-
-                <div class="design-card">
-                <div class="design-card-title">레이아웃</div>
-                <div class="design-2col">
-                    <div class="design-group">
-                        <div class="label-with-tip">
-                            <span class="label-text">헤더 높이</span>
-                            <span class="label-tip-wrap"><input type="number" id="headerHeightLabel" class="label-tip-input" min="0" max="55" step="1" value="5"><span class="label-tip-unit">%</span></span>
-                        </div>
-                        <input type="range" id="headerHeight" min="0" max="55" value="5" step="1" class="slider-input">
-                    </div>
-
-                    <div class="design-group" id="textScaleGroup">
-                        <div class="label-with-tip">
-                            <span class="label-text">전체 텍스트 크기</span>
-                            <span class="label-tip-wrap"><input type="number" id="textScaleLabel" class="label-tip-input" min="70" max="150" step="1" value="100"><span class="label-tip-unit">%</span></span>
-                        </div>
-                        <input type="range" id="textScale" min="70" max="150" value="100" step="1" class="slider-input">
-                    </div>
-                </div>
-
-                <div id="sectionGapGroup">
-                    <div class="design-2col">
-                        <div class="design-group">
-                            <div class="label-with-tip">
-                                <span class="label-text">좌측 간격</span>
-                                <span class="label-tip-wrap"><input type="number" id="sectionGapLabel" class="label-tip-input" min="0" max="60" step="1" value="15"><span class="label-tip-unit">px</span></span>
-                            </div>
-                            <input type="range" id="sectionGap" min="0" max="60" value="15" step="1" class="slider-input">
-                        </div>
-                        <div class="design-group">
-                            <div class="label-with-tip">
-                                <span class="label-text">우측 간격</span>
-                                <span class="label-tip-wrap"><input type="number" id="sectionGapRightLabel" class="label-tip-input" min="0" max="60" step="1" value="15"><span class="label-tip-unit">px</span></span>
-                            </div>
-                            <input type="range" id="sectionGapRight" min="0" max="60" value="15" step="1" class="slider-input">
-                        </div>
-                    </div>
-                    <span class="gap-auto-hint" id="sectionGapHint">‘페이지 끝까지 채우기’가 켜져 있어 간격이 자동 분배됩니다 — 끄면 직접 조절할 수 있어요</span>
-                </div>
-
-                <div class="balance-row">
-                    <button class="btn-toggle-all btn-balance-full btn-balance-half" id="btnBalance" aria-pressed="false" title="섹션 내용을 좌·우 컬럼에 높이가 비슷하도록 나눕니다 (텍스트 크기·섹션 간격은 그대로 유지)">양쪽 높이 맞추기</button>
-                    <label class="toggle-row toggle-sub bottom-exact-inline" id="bottomExactRow" title="켜면 두 컬럼 하단을 페이지 끝에 정확히 맞춥니다. «양쪽 높이 맞추기»가 켜져 있을 때만 적용됩니다.">
-                        <span class="switch"><input type="checkbox" id="balanceBottomExact"><span class="track"></span></span>
-                        <span class="toggle-text">
-                            <span class="toggle-label">페이지 끝까지 채우기</span>
-                            <span class="toggle-desc">좌우 칸 아래 끝을 페이지 끝에 맞춤</span>
-                        </span>
-                    </label>
-                </div>
                 </div>
 
             </div>
