@@ -5,6 +5,9 @@ let generatedImagesUrls = [];
 let sectionPreviewRects = [];   // 렌더된 각 섹션의 미리보기 내 위치(비율) — 북마크 클릭 시 이동·하이라이트용
 let cachedBgImg = null;
 let bgFileName = '';   // 배경 이미지 파일명 — 저장/복원 시 드롭존 라벨을 원래대로 되돌리기 위해 보관
+let cachedLogoImg = null;   // 상단 로고(병원 로고 등) — 넣으면 제목·기간이 그만큼 아래로 내려간다
+let logoFileName = '';
+let logoSizePct = 100;        // 로고 크기(%) 50~150, 5 단위
 let isBackedUp = true;
 let activeColumnTab = 'left';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
@@ -23,8 +26,12 @@ const MAX_UNDO = 100;
 const SS_KEY = 'a4EventData';
 const SS_BG_KEY = 'a4BgImage';
 const SS_BG_NAME_KEY = 'a4BgName';
+const SS_LOGO_KEY = 'a4LogoImage';
+const SS_LOGO_NAME_KEY = 'a4LogoName';
 const BG_LABEL_DEFAULT = '파일 선택 또는 드래그 (선택사항)';   // 배경 없을 때 드롭존 기본 문구
 const MAX_BG_NAME_LEN = 120;   // 복원한 파일명 표시 길이 상한(비정상 파일이 레이아웃을 깨뜨리지 않게)
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;   // 배경·로고 업로드 크기 상한
+const LOGO_SCALE_MIN = 50, LOGO_SCALE_MAX = 150, LOGO_SCALE_DEFAULT = 100;
 const SCHEMA_VERSION = 1;   // 저장 스키마 버전 — 향후 구조 변경 시 마이그레이션 분기 기준
 const MAX_RESTORE_ITEMS = 2000;   // 백업 복원 시 항목 수 상한(손상/악성 파일 DoS 방지)
 
@@ -214,6 +221,7 @@ function getSnapshot() {
         itemHlColor: document.getElementById('itemHlColorHex')?.value || '#FF0000',
         labelBoxColor: document.getElementById('labelBoxColorHex')?.value || '#000000',
         headerHeight: document.getElementById('headerHeight')?.value || '5',
+        logoScale: logoSizePct,   // 백업 키는 슬라이더 이름과 동일하게
         textScale: document.getElementById('textScale')?.value || '100',
         sectionGap: document.getElementById('sectionGap')?.value || '15',
         sectionGapRight: document.getElementById('sectionGapRight')?.value || '15',
@@ -292,6 +300,13 @@ function restoreSnapshot(data) {
         sl.value = data.headerHeight;
         updateSliderBg(sl);
         document.getElementById('headerHeightLabel').value = data.headerHeight;
+    }
+    {   // 로고 크기(없던 기존 저장본은 기본 100%)
+        const v = parseInt(data.logoScale, 10);
+        logoSizePct = Number.isFinite(v)
+            ? Math.min(Math.max(v, LOGO_SCALE_MIN), LOGO_SCALE_MAX)
+            : LOGO_SCALE_DEFAULT;
+        syncLogoScaleUI();
     }
     if (data.textScale !== undefined) {
         const sl = document.getElementById('textScale');
@@ -426,10 +441,20 @@ function saveToSessionStorage(data = null) {
         }
         catch(e) { showColorToast('배경 이미지가 너무 커 세션에 저장되지 않았습니다'); }
     }
+    if (cachedLogoImg?.src?.startsWith('data:')) {
+        try {
+            sessionStorage.setItem(SS_LOGO_KEY, cachedLogoImg.src);
+            sessionStorage.setItem(SS_LOGO_NAME_KEY, logoFileName);
+        }
+        catch(e) { showColorToast('로고 이미지가 너무 커 세션에 저장되지 않았습니다'); }
+    }
 }
 /* 배경을 지웠을 때 세션에 남은 배경까지 비운다(새로고침 시 지운 배경이 되살아나지 않게). */
 function clearSessionBg() {
     try { sessionStorage.removeItem(SS_BG_KEY); sessionStorage.removeItem(SS_BG_NAME_KEY); } catch(e) {}
+}
+function clearSessionLogo() {
+    try { sessionStorage.removeItem(SS_LOGO_KEY); sessionStorage.removeItem(SS_LOGO_NAME_KEY); } catch(e) {}
 }
 /* 배경을 완전히 제거 — 캔버스용 이미지·드롭존 표시·세션 저장본·파일 입력값까지 한 번에.
  * 파일 입력값을 비워야 같은 파일을 다시 골랐을 때도 change 이벤트가 발생한다. */
@@ -438,6 +463,14 @@ function clearBackground() {
     hideBgThumb();
     clearSessionBg();
     const input = document.getElementById('bgInput');
+    if (input) input.value = '';
+}
+/* 로고 제거 — 배경과 같은 규칙(크기 값은 유지해 다시 넣었을 때 그대로 쓰이게). */
+function clearLogo() {
+    cachedLogoImg = null;
+    hideLogoThumb();
+    clearSessionLogo();
+    const input = document.getElementById('logoInput');
     if (input) input.value = '';
 }
 function restoreFromSessionStorage() {
@@ -452,6 +485,14 @@ function restoreFromSessionStorage() {
             img.onload = () => { cachedBgImg = img; showBgThumb(bgData, bgName); generateImages(); };
             img.onerror = () => { clearBackground(); generateImages(); };   // 손상된 저장 배경은 조용히 제거
             img.src = bgData;
+        }
+        const logoData = sessionStorage.getItem(SS_LOGO_KEY);
+        if (logoData) {
+            const logoName = sessionStorage.getItem(SS_LOGO_NAME_KEY) || '';
+            const img = new Image();
+            img.onload = () => { cachedLogoImg = img; showLogoThumb(logoData, logoName); generateImages(); };
+            img.onerror = () => { clearLogo(); generateImages(); };
+            img.src = logoData;
         }
         return true;
     } catch(e) { return false; }
@@ -1713,6 +1754,28 @@ function currentSectionGapRight() {
 }
 /* 헤더(제목·기간) 아래와 섹션 시작 사이 간격. 작을수록 섹션이 상단 텍스트에 붙음 */
 const HEADER_CONTENT_GAP = 5;
+
+/* ── 상단 로고 ──
+ * 로고는 헤더 밴드 위쪽에 얹히고, 그만큼 헤더가 아래로 늘어나 제목·기간이 밀려난다.
+ * 즉 로고 블록 높이 = 위 여백 + 로고 높이 + 제목까지의 간격. */
+const LOGO_BASE_H = 86;     // 크기 100% 기준 로고 높이(px, 1240×1754 캔버스 기준)
+const LOGO_MAX_W = 420;     // 100% 기준 가로 상한 — 가로로 긴 로고가 페이지 폭을 잡아먹지 않게
+const LOGO_TOP_PAD = 26;    // 페이지 상단 ~ 로고
+const LOGO_GAP = 16;        // 로고 ~ 제목
+
+/* 로고의 실제 그리기 크기와 헤더에서 차지할 높이. 로고가 없으면 null. */
+function logoMetrics(img = cachedLogoImg, scalePct = logoSizePct) {
+    if (!img || !img.width || !img.height) return null;
+    const s = (Number(scalePct) || LOGO_SCALE_DEFAULT) / 100;
+    let h = LOGO_BASE_H * s;
+    let w = h * (img.width / img.height);
+    const maxW = LOGO_MAX_W * s;
+    if (w > maxW) { w = maxW; h = w * (img.height / img.width); }
+    return { w, h, blockH: LOGO_TOP_PAD + h + LOGO_GAP };
+}
+function logoBlockHeight(img = cachedLogoImg, scalePct = logoSizePct) {
+    return logoMetrics(img, scalePct)?.blockH || 0;
+}
 /* 균등 맞춤 시 섹션 사이 간격 상한 — 내용이 적어도 이 이상은 벌어지지 않음(빈 느낌 방지).
  * 이 값을 키우면 더 꽉 채우고(간격↑), 줄이면 간격을 좁게 유지(하단 여백↑). */
 const MAX_JUSTIFY_GAP = 60;
@@ -1763,7 +1826,7 @@ function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify, bott
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false, rectSink = null) {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false, rectSink = null, logoImg = null, logoScalePct = LOGO_SCALE_DEFAULT) {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -1777,7 +1840,11 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, W, H);
 
-    const headerH = Math.round(H * headerRatio);
+    // 로고가 있으면 그 블록만큼 헤더가 늘어난다 → 제목·기간이 자동으로 아래로 내려가 자리가 생김.
+    // 제목·기간을 그릴지는 사용자가 정한 헤더 높이(bandH)로만 판단한다(로고 때문에 되살아나지 않게).
+    const bandH = Math.round(H * headerRatio);
+    const logoM = logoMetrics(logoImg, logoScalePct);
+    const headerH = bandH + (logoM ? logoM.blockH : 0);
 
     // 배경 이미지 — 전체 캔버스 cover
     if (bgImg) {
@@ -1871,8 +1938,11 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
         }
     }
 
+    // 상단 로고 — 헤더 밴드 위쪽에 가운데 정렬
+    if (logoM) ctx.drawImage(logoImg, (W - logoM.w) / 2, LOGO_TOP_PAD, logoM.w, logoM.h);
+
     // 제목 + 이벤트 기간 (헤더 중앙, 두 줄)
-    if (headerH > 0 && (topText || periodText)) {
+    if (bandH > 0 && (topText || periodText)) {
         ctx.letterSpacing = '0px';
         ctx.textBaseline = 'bottom';
         const TOP_SIZE = 22;
@@ -1919,7 +1989,7 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     }
 
     // 기간 우측 텍스트 (헤더 우측 끝, 기간 높이에 우측 정렬)
-    if (headerH > 0 && periodNote) {
+    if (bandH > 0 && periodNote) {
         const NOTE_SIZE = 18;
         const noteLines = wrapStyledText(ctx, periodNote, W - MARGIN * 2, NOTE_SIZE, false, fonts);
         if (noteLines.length && noteLines[0].chunks.length) {
@@ -2678,11 +2748,17 @@ function measurePageHeightAtScale(page, scale) {
     return total;
 }
 
+/* 현재 설정으로 그릴 때의 실제 헤더 높이(px) — 슬라이더 밴드 + 로고 블록.
+ * drawA4Canvas 의 headerH 계산과 반드시 같아야 넘침 판정이 실제 결과와 어긋나지 않는다. */
+function currentHeaderHeight() {
+    const { H } = CONFIG;
+    const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '5', 10)) / 100;
+    return Math.round(H * headerRatio) + logoBlockHeight();
+}
 /* 헤더 높이를 반영한 컨텐츠 영역 가용 세로 높이(px). 넘침 판정·자동 크기 공통 사용. */
 function availableContentHeight() {
     const { H } = CONFIG;
-    const headerRatio = (parseInt(document.getElementById('headerHeight')?.value || '5', 10)) / 100;
-    const headerH = Math.round(H * headerRatio);
+    const headerH = currentHeaderHeight();
     return (H - MARGIN) - (headerH + (headerH > 0 ? HEADER_CONTENT_GAP : MARGIN));
 }
 
@@ -2829,7 +2905,7 @@ function generateImages() {
             }
             sectionPreviewRects = [];   // 북마크 → 미리보기 하이라이트용 섹션 위치 맵(재생성)
             const canvases = pages.map((page, pi) =>
-                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact, { page: pi, rects: sectionPreviewRects })
+                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact, { page: pi, rects: sectionPreviewRects }, cachedLogoImg, logoSizePct)
             );
 
             generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -3161,6 +3237,39 @@ function hideBgThumb() {
     document.getElementById('dropZone')?.classList.remove('file-attached');
 }
 
+/* 로고 드롭존 표시 — 배경과 같은 규칙. 크기 슬라이더는 로고가 있을 때만 노출한다. */
+function showLogoThumb(src, name = logoFileName) {
+    const thumb = document.getElementById('logoThumb');
+    if (thumb) { thumb.src = src; thumb.classList.add('visible'); }
+    const sub = document.getElementById('logoFileLabelSub');
+    if (sub) sub.textContent = '로고 이미지 로드됨';
+    logoFileName = String(name || '').slice(0, MAX_BG_NAME_LEN);
+    const main = document.getElementById('logoFileLabelMain');
+    if (main) main.textContent = logoFileName || BG_LABEL_DEFAULT;
+    document.getElementById('logoDropZone')?.classList.add('file-attached');
+    syncLogoScaleUI();
+}
+function hideLogoThumb() {
+    const thumb = document.getElementById('logoThumb');
+    if (thumb) { thumb.src = ''; thumb.classList.remove('visible'); }
+    const sub = document.getElementById('logoFileLabelSub');
+    if (sub) sub.textContent = '';
+    logoFileName = '';
+    const main = document.getElementById('logoFileLabelMain');
+    if (main) main.textContent = BG_LABEL_DEFAULT;
+    document.getElementById('logoDropZone')?.classList.remove('file-attached');
+    syncLogoScaleUI();
+}
+/* 로고 크기 슬라이더 값·표시 여부 동기화. */
+function syncLogoScaleUI() {
+    const group = document.getElementById('logoScaleGroup');
+    if (group) group.hidden = !cachedLogoImg;
+    const slider = document.getElementById('logoScale');
+    if (slider) { slider.value = logoSizePct; updateSliderBg(slider); }
+    const label = document.getElementById('logoScaleLabel');
+    if (label) label.value = logoSizePct;
+}
+
 /* ============================================================
  * 프로젝트 저장 / 불러오기
  * ============================================================ */
@@ -3179,6 +3288,10 @@ function saveProject() {
     if (cachedBgImg?.src?.startsWith('data:')) {
         data.bgImage = cachedBgImg.src;
         if (bgFileName) data.bgName = bgFileName;   // 파일명까지 담아 드롭존 표시를 그대로 복원
+    }
+    if (cachedLogoImg?.src?.startsWith('data:')) {
+        data.logoImage = cachedLogoImg.src;
+        if (logoFileName) data.logoName = logoFileName;
     }
     // 커스텀 저장 색상 팔레트도 함께 담아 다른 PC에서 열어도 유지되게
     const slots = collectColorSlots();
@@ -3200,22 +3313,40 @@ function loadProject(event) {
             const data = JSON.parse(e.target.result);
             applyColorSlots(data.colorSlots);   // 팔레트 먼저 — 이후 프리셋 렌더가 새 슬롯을 반영하도록
             restoreSnapshot(data);
+            // 이전 선택 파일 해제 — 같은 파일을 다시 골라도 change 가 뜨도록
             const bgInput = document.getElementById('bgInput');
-            if (bgInput) bgInput.value = '';   // 이전 선택 파일 해제 — 같은 파일을 다시 골라도 change 가 뜨도록
-            // 배경도 저장 시점 상태와 정확히 일치시킨다 — 백업에 있으면 그 배경으로,
-            // 없었으면(저장 당시 배경 없음) 현재 배경을 비운다.
-            if (data.bgImage) {
+            if (bgInput) bgInput.value = '';
+            const logoInput = document.getElementById('logoInput');
+            if (logoInput) logoInput.value = '';
+
+            // 배경·로고도 저장 시점 상태와 정확히 일치시킨다 — 백업에 있으면 그 이미지로,
+            // 없었으면(저장 당시 없음) 현재 것을 비운다.
+            // 이미지 로드는 비동기라, 모두 끝난 뒤 한 번만 렌더·저장 표시하도록 센다.
+            const hadBg = !!cachedBgImg, hadLogo = !!cachedLogoImg;   // 안내 문구용 — 실제로 비워진 것만 알리기
+            let pending = 1;   // 본문 처리 자체를 1건으로 세어 이미지가 없어도 마무리가 실행되게
+            const settle = () => { if (--pending === 0) { generateImages(); markSaved(); } };
+            const loadInto = (src, name, apply, clear, failMsg) => {
+                if (!src) { clear(); return; }
+                pending++;
                 const img = new Image();
-                img.onload = () => { cachedBgImg = img; showBgThumb(data.bgImage, data.bgName); generateImages(); markSaved(); };
-                img.onerror = () => { clearBackground(); showColorToast('배경 이미지를 복원하지 못했습니다. 데이터 본문은 정상 적용됐습니다.'); generateImages(); markSaved(); };
-                img.src = data.bgImage;
-                showColorToast('불러오기 완료. 배경 이미지도 함께 복원되었습니다.');
-            } else {
-                clearBackground();
-                showColorToast('불러오기 완료. 저장 당시 배경이 없어 배경을 비웠습니다.');
-                generateImages();
-                markSaved();
-            }
+                img.onload = () => { apply(img, src, name); settle(); };
+                img.onerror = () => { clear(); showColorToast(failMsg); settle(); };
+                img.src = src;
+            };
+            loadInto(data.bgImage, data.bgName,
+                (img, src, name) => { cachedBgImg = img; showBgThumb(src, name); },
+                clearBackground, '배경 이미지를 복원하지 못했습니다. 데이터 본문은 정상 적용됐습니다.');
+            loadInto(data.logoImage, data.logoName,
+                (img, src, name) => { cachedLogoImg = img; showLogoThumb(src, name); },
+                clearLogo, '로고 이미지를 복원하지 못했습니다. 데이터 본문은 정상 적용됐습니다.');
+
+            const restored = [], emptied = [];
+            if (data.bgImage) restored.push('배경'); else if (hadBg) emptied.push('배경');
+            if (data.logoImage) restored.push('로고'); else if (hadLogo) emptied.push('로고');
+            showColorToast('불러오기 완료.'
+                + (restored.length ? ` ${restored.join('·')} 이미지도 함께 복원되었습니다.` : '')
+                + (emptied.length ? ` 저장 당시 없던 항목(${emptied.join('·')})은 비웠습니다.` : ''));
+            settle();
         } catch(err) { showColorToast('잘못된 백업 파일입니다.'); }
     };
     reader.onerror = () => showColorToast('파일을 읽지 못했습니다. 다시 시도해 주세요.');
@@ -3751,45 +3882,98 @@ window.onload = () => {
     });
 
 
-    // 배경 이미지
-    const bgInput = document.getElementById('bgInput');
-    bgInput.addEventListener('change', e => {
-        if (!e.target.files?.length) { clearBackground(); debouncedGenerateImages(); return; }
-        const file = e.target.files[0];
-        if (file.size > 20 * 1024 * 1024) { showColorToast('이미지 파일 크기는 20MB 이하로 선택해 주세요.'); e.target.value = ''; return; }
+    // 배경·로고 이미지 — 드롭존 동작(클릭·파일선택·드래그&드롭)은 완전히 동일하므로 한 곳에서 배선한다.
+    // apply: 이미지가 준비됐을 때 캐시에 넣고 썸네일을 표시, clear: 선택 해제 시 초기화, isSet: 현재 들어있는지.
+    const wireImageDropZone = ({ zoneId, inputId, labelMainId, clearBtnId, apply, clear, isSet }) => {
+        const zone = document.getElementById(zoneId);
+        const input = document.getElementById(inputId);
+        if (!zone || !input) return;
+        // needType: 드롭은 아무 파일이나 떨어질 수 있어 형식을 확인. 파일 선택은 accept="image/*" 로 이미 걸러진다.
+        const accept = (file, needType) => {
+            if (!file) return false;
+            if (needType && !file.type.startsWith('image/')) return false;
+            if (file.size > MAX_IMAGE_BYTES) { showColorToast('이미지 파일 크기는 20MB 이하로 선택해 주세요.'); return false; }
+            return true;
+        };
+        const read = file => {
+            saveSnapshot();
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const img = new Image();
+                img.onload = () => { apply(img, ev.target.result, file.name); debouncedGenerateImages(); };
+                img.onerror = () => showColorToast('이미지를 불러오지 못했습니다. 다른 파일을 선택해 주세요.');
+                img.src = ev.target.result;
+            };
+            reader.onerror = () => showColorToast('파일을 읽지 못했습니다. 다시 시도해 주세요.');
+            reader.readAsDataURL(file);
+            // 디코딩 전이라도 선택한 파일명을 먼저 보여줘 반응이 즉시 보이게
+            const main = document.getElementById(labelMainId);
+            if (main) main.textContent = file.name;
+            zone.classList.add('file-attached');
+        };
+        input.addEventListener('change', e => {
+            if (!e.target.files?.length) { clear(); debouncedGenerateImages(); return; }
+            const file = e.target.files[0];
+            if (!accept(file, false)) { e.target.value = ''; return; }
+            read(file);
+        });
+        zone.addEventListener('click', () => input.click());
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('file-attached'); });
+        zone.addEventListener('dragleave', () => { if (!isSet()) zone.classList.remove('file-attached'); });
+        zone.addEventListener('drop', e => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (!accept(file, true)) { if (!isSet()) zone.classList.remove('file-attached'); return; }
+            read(file);
+        });
+        // 제거 버튼 — 드롭존 클릭(파일 선택 열기)으로 번지지 않도록 전파를 막는다.
+        // 이미지 자체는 되돌리기 대상이 아니라(배경·로고 공통) 스냅샷 대신 '저장 안 됨' 표시만 갱신.
+        document.getElementById(clearBtnId)?.addEventListener('click', e => {
+            e.stopPropagation();
+            if (!isSet()) return;
+            clear();
+            debouncedGenerateImages();
+            markUnsaved();
+        });
+    };
+    wireImageDropZone({
+        zoneId: 'dropZone', inputId: 'bgInput', labelMainId: 'fileLabelMain', clearBtnId: 'bgClear',
+        apply: (img, src, name) => { cachedBgImg = img; showBgThumb(src, name); },
+        clear: clearBackground, isSet: () => !!cachedBgImg
+    });
+    wireImageDropZone({
+        zoneId: 'logoDropZone', inputId: 'logoInput', labelMainId: 'logoFileLabelMain', clearBtnId: 'logoClear',
+        apply: (img, src, name) => { cachedLogoImg = img; showLogoThumb(src, name); },
+        clear: clearLogo, isSet: () => !!cachedLogoImg
+    });
+
+    // 로고 크기 슬라이더 (50~150%, 5 단위)
+    const logoScaleSlider = document.getElementById('logoScale');
+    const logoScaleInput = document.getElementById('logoScaleLabel');
+    const setLogoScale = v => {
+        logoSizePct = Math.min(Math.max(v, LOGO_SCALE_MIN), LOGO_SCALE_MAX);
+        if (logoScaleSlider) { logoScaleSlider.value = logoSizePct; updateSliderBg(logoScaleSlider); }
+    };
+    logoScaleSlider?.addEventListener('input', () => {
+        setLogoScale(parseInt(logoScaleSlider.value, 10) || LOGO_SCALE_DEFAULT);
+        if (logoScaleInput) logoScaleInput.value = logoSizePct;
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
+    logoScaleInput?.addEventListener('input', () => {
+        const v = parseInt(logoScaleInput.value, 10);
+        if (isNaN(v)) return;
+        setLogoScale(v);
+        debouncedGenerateImages();
+        handleInputSnapshot();
+    });
+    logoScaleInput?.addEventListener('blur', () => {
+        const v = parseInt(logoScaleInput.value, 10);
+        setLogoScale(isNaN(v) ? LOGO_SCALE_DEFAULT : v);
+        logoScaleInput.value = logoSizePct;
         saveSnapshot();
-        const reader = new FileReader();
-        reader.onload = ev => {
-            const img = new Image();
-            img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result, file.name); debouncedGenerateImages(); };
-            img.onerror = () => showColorToast('이미지를 불러오지 못했습니다. 다른 파일을 선택해 주세요.');
-            img.src = ev.target.result;
-        };
-        reader.onerror = () => showColorToast('파일을 읽지 못했습니다. 다시 시도해 주세요.');
-        reader.readAsDataURL(file);
-        document.getElementById('fileLabelMain').textContent = file.name;
-        document.getElementById('dropZone').classList.add('file-attached');
     });
-    document.getElementById('dropZone').addEventListener('click', () => bgInput.click());
-    document.getElementById('dropZone').addEventListener('dragover', e => { e.preventDefault(); document.getElementById('dropZone').classList.add('file-attached'); });
-    document.getElementById('dropZone').addEventListener('dragleave', () => { if (!cachedBgImg) document.getElementById('dropZone').classList.remove('file-attached'); });
-    document.getElementById('dropZone').addEventListener('drop', e => {
-        e.preventDefault(); saveSnapshot();
-        const file = e.dataTransfer.files[0];
-        if (!file?.type.startsWith('image/')) return;
-        if (file.size > 20 * 1024 * 1024) { showColorToast('이미지 파일 크기는 20MB 이하로 선택해 주세요.'); return; }
-        const reader = new FileReader();
-        reader.onload = ev => {
-            const img = new Image();
-            img.onload = () => { cachedBgImg = img; showBgThumb(ev.target.result, file.name); debouncedGenerateImages(); };
-            img.onerror = () => showColorToast('이미지를 불러오지 못했습니다. 다른 파일을 선택해 주세요.');
-            img.src = ev.target.result;
-        };
-        reader.onerror = () => showColorToast('파일을 읽지 못했습니다. 다시 시도해 주세요.');
-        reader.readAsDataURL(file);
-        document.getElementById('fileLabelMain').textContent = file.name;
-        document.getElementById('dropZone').classList.add('file-attached');
-    });
+    syncLogoScaleUI();
 
     // 항목 추가 버튼
     document.getElementById('addSectionBtn').addEventListener('click', () => {

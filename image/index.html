@@ -59,6 +59,31 @@
                             <span id="fileLabelSub" class="file-label-sub"></span>
                         </label>
                         <input type="file" id="bgInput" accept="image/*">
+                        <button type="button" class="file-clear" id="bgClear" title="배경 이미지 제거" aria-label="배경 이미지 제거">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="design-group">
+                    <div class="design-group-label">로고 이미지<span class="design-group-hint">넣으면 제목·기간이 아래로 내려가 자리가 생겨요</span></div>
+                    <div class="file-input-wrapper" id="logoDropZone">
+                        <img id="logoThumb" class="bg-thumb logo-thumb" alt="">
+                        <label class="file-label" id="logoFileLabel">
+                            <span id="logoFileLabelMain">파일 선택 또는 드래그 (선택사항)</span>
+                            <span id="logoFileLabelSub" class="file-label-sub"></span>
+                        </label>
+                        <input type="file" id="logoInput" accept="image/*">
+                        <button type="button" class="file-clear" id="logoClear" title="로고 이미지 제거" aria-label="로고 이미지 제거">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        </button>
+                    </div>
+                    <div class="design-group logo-scale-group" id="logoScaleGroup" hidden>
+                        <div class="label-with-tip">
+                            <span class="label-text">로고 크기</span>
+                            <span class="label-tip-wrap"><input type="number" id="logoScaleLabel" class="label-tip-input" min="50" max="150" step="5" value="100"><span class="label-tip-unit">%</span></span>
+                        </div>
+                        <input type="range" id="logoScale" min="50" max="150" value="100" step="5" class="slider-input">
                     </div>
                 </div>
 

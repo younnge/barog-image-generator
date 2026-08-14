@@ -312,6 +312,25 @@ body {
     border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.1); display: none;
 }
 .bg-thumb.visible { display: block; }
+/* 이미지 제거 버튼 — 썸네일이 보일 때(=이미지가 들어있을 때)만 노출.
+   드래그 중 임시로 붙는 .file-attached 가 아니라 썸네일 상태에 맞춰야 헛보이지 않는다 */
+.file-clear {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    display: none; align-items: center; justify-content: center;
+    width: 22px; height: 22px; padding: 0;
+    border: none; border-radius: 50%;
+    background: rgba(0,0,0,0.06); color: var(--text-muted);
+    cursor: pointer; transition: background .15s ease, color .15s ease;
+}
+.bg-thumb.visible ~ .file-clear { display: flex; }
+/* 썸네일·제거 버튼이 붙으면 가운데 문구가 그 아래로 깔리지 않게 양쪽을 비켜준다 */
+.bg-thumb.visible ~ .file-label { padding-left: 44px; padding-right: 38px; }
+.file-clear:hover { background: #FF3B30; color: #fff; }
+/* 로고는 잘라내지 않고 전체가 보여야 원본 비율을 가늠할 수 있다 */
+.logo-thumb { object-fit: contain; background: #fff; }
+/* 로고 크기 슬라이더 — 드롭존 바로 아래 딸린 하위 설정 */
+.logo-scale-group { margin-top: 2px; }
+.logo-scale-group[hidden] { display: none; }
 
 /* ── 슬라이더 ── */
 .label-with-tip { display: flex; align-items: baseline; gap: 6px; }
