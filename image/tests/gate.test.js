@@ -14,8 +14,14 @@ const GATE = fs.readFileSync(path.join(__dirname, '..', 'gate.js'), 'utf8');
 const HTML = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
 const SALT = /const GATE_SALT = '([^']+)'/.exec(GATE)[1];
-const HASH = /const GATE_HASH = '([0-9a-f]{64})'/.exec(GATE)[1];
+const REAL_HASH = /const GATE_HASH = '([0-9a-f]{64})'/.exec(GATE)[1];
 const sha = s => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
+
+/* 테스트는 실제 암호를 몰라야 한다 — 알아야 한다면 암호를 바꿀 때마다 테스트가 깨지고,
+ * 저장소에 암호가 남는다. 그래서 검증용 암호로 해시를 갈아끼운 사본을 돌린다. */
+const TEST_PW = 'test-password-1234';
+const TEST_HASH = sha(SALT + ':' + TEST_PW);
+const GATE_FOR_TEST = GATE.replace(/const GATE_HASH = '[0-9a-f]{64}'/, `const GATE_HASH = '${TEST_HASH}'`);
 
 /* gate.js 를 브라우저 흉내 컨텍스트에서 돌리고, 열림 여부를 돌려준다. */
 function runGate({ saved = null, typed = null } = {}) {
@@ -50,7 +56,7 @@ function runGate({ saved = null, typed = null } = {}) {
         },
     };
     vm.createContext(sandbox);
-    vm.runInContext(GATE, sandbox);
+    vm.runInContext(GATE_FOR_TEST, sandbox);
     domReady();
 
     const submit = async () => {
@@ -69,10 +75,7 @@ function runGate({ saved = null, typed = null } = {}) {
 group('암호 확인');
 
 test('맞는 암호를 넣으면 열린다', async () => {
-    // 테스트는 해시만 알고 암호는 모른다 — 해시가 곧 정답이므로 역산 대신 동일 규칙으로 만든다
-    const pw = 'barog-2026-임시암호';
-    assert.strictEqual(sha(SALT + ':' + pw), HASH, '샘플 암호가 현재 해시와 맞아야 이 테스트가 의미 있음');
-    const g = runGate({ typed: pw });
+    const g = runGate({ typed: TEST_PW });
     assert.ok(!g.opened(), '입력 전에는 잠겨 있어야 함');
     await g.submit();
     assert.ok(g.opened(), '맞는 암호인데 열리지 않음');
@@ -96,10 +99,10 @@ test('빈 입력은 아무 일도 하지 않는다', async () => {
 group('기억');
 
 test('통과하면 다음 방문에는 묻지 않는다', async () => {
-    const g = runGate({ typed: 'barog-2026-임시암호' });
+    const g = runGate({ typed: TEST_PW });
     await g.submit();
-    assert.strictEqual(g.store.a4GateOk, HASH, '통과 표시가 저장되어야 함');
-    const again = runGate({ saved: HASH });
+    assert.strictEqual(g.store.a4GateOk, TEST_HASH, '통과 표시가 저장되어야 함');
+    const again = runGate({ saved: TEST_HASH });
     assert.ok(again.opened(), '저장된 표시가 있는데 다시 물어봄');
 });
 
@@ -116,9 +119,21 @@ test('잠겨 있는 동안 뒤 화면 스크롤을 막는다', () => {
 });
 
 test('열리면 잠금 표시가 풀린다', async () => {
-    const g = runGate({ typed: 'barog-2026-임시암호' });
+    const g = runGate({ typed: TEST_PW });
     await g.submit();
     assert.ok(!g.locked());
+});
+
+group('실제 설정값');
+
+test('GATE_HASH 가 올바른 형식이고 자리표시자가 아니다', () => {
+    assert.ok(/^[0-9a-f]{64}$/.test(REAL_HASH), 'SHA-256 16진수 64자여야 함');
+    assert.notStrictEqual(REAL_HASH, TEST_HASH, '테스트용 해시가 그대로 들어가면 안 됨');
+    // 흔한 약한 암호가 그대로 들어갔는지 확인 (해시가 공개되므로 실제로 대입당한다)
+    const WEAK = ['1234', 'password', '0000', 'admin', 'barog', 'test', '12345678', 'qwerty'];
+    WEAK.forEach(w => {
+        assert.notStrictEqual(REAL_HASH, sha(SALT + ':' + w), `약한 암호 '${w}' 가 설정돼 있음`);
+    });
 });
 
 group('마크업 · 걷어내기 용이성');
