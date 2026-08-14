@@ -83,6 +83,7 @@ function makeElement(tag = 'div', id = '', bag = null) {
             return cache[sel];
         },
         querySelectorAll() { return []; },
+        focus() {}, blur() {}, click() {}, setSelectionRange() {},
         getBoundingClientRect: () => ({ top: 0, bottom: 20, left: 0, right: 100, width: 100, height: 20 }),
         fire(type, ev = {}) { (this._listeners[type] || []).forEach(fn => fn(Object.assign({ target: el }, ev))); },
     };

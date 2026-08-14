@@ -35,6 +35,8 @@ node tests/lang.test.js        # 파일 하나만 실행해도 됩니다
 | `tests/render.test.js` | **측정과 그리기 높이 일치**, 가격 그리드, 로고 기하·헤더 밀림 |
 | `tests/persist.test.js` | 백업·세션 복원, 세션 이미지 재기록 억제 |
 | `tests/violation.test.js` | 의료법 검사 배선(제목·기간 포함), 툴팁 수명 |
+| `tests/gate.test.js` | 진입 암호 통과·차단·기억 |
+| `tests/init.test.js` | `window.onload` 배선 스모크(스코프를 넘는 참조 탐지) |
 
 `tests/helpers/` 에 공용 DOM·canvas 스텁과 러너가 있습니다.
 
@@ -45,7 +47,9 @@ node tests/lang.test.js        # 파일 하나만 실행해도 됩니다
 | `index.html` | 마크업 + CSP/SRI + CDN(JSZip·FileSaver·폰트) |
 | `main.js` | 전체 로직(입력·DSL 서식·측정/캔버스 렌더·균등 맞춤·백업) |
 | `style.css` | UI 스타일 + @font-face |
+| `gate.js` | 진입 암호(사내 전용 표시용) — 걷어낼 땐 이 파일 + `index.html` 의 `#gate` + `style.css` 의 '진입 암호' 구역 |
 | `robots.txt` | 검색 색인 차단(사내 전용) |
+| `tools/set-password.js` | 진입 암호 변경 도구 |
 | `사용설명서.html` | 사용자용 도움말 — 앱 헤더의 «사용설명서» 링크로 연결 |
 | `tests/` | 회귀 테스트 |
 
@@ -65,6 +69,19 @@ node tests/lang.test.js        # 파일 하나만 실행해도 됩니다
 저장소 루트의 `.github/workflows/deploy.yml` 이 master 푸시마다 `image/` 를 GitHub Pages로 올립니다.
 **`verify` job(구문 검사 + `npm test`)을 통과해야 `deploy` job이 실행됩니다.**
 `test.yml` 은 pull request 검증용입니다.
+
+## 진입 암호
+
+사내 전용 표시용으로 첫 화면에 암호 입력창이 있습니다.
+
+```bash
+node tools/set-password.js "새암호"    # 출력된 GATE_HASH 를 gate.js 에 붙여넣고 커밋
+```
+
+> **이것은 자물쇠가 아니라 커튼입니다.** 저장소가 공개라 `gate.js` 의 해시가 그대로 보이고,
+> `main.js` 도 인증 없이 내려받을 수 있습니다. 우연한 접근은 막지만 작정한 사람은 우회합니다.
+> 실제 접근 제어가 필요하면 Cloudflare Access 등 인증 게이트를 앞에 두고
+> `gate.js` · `index.html` 의 `#gate` 블록 · `style.css` 의 '진입 암호' 구역을 지우면 됩니다.
 
 ## 알아두면 좋은 점
 

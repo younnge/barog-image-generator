@@ -17,6 +17,19 @@
     <link rel="stylesheet" href="style.css?v=20260624b">
 </head>
 <body>
+    <!-- 진입 암호 — 사내 전용 표시용. 걷어낼 땐 이 블록 + gate.js + style.css 의 '진입 암호' 구역.
+         자바스크립트가 꺼져 있으면 열리지 않은 채로 남는다(의도된 동작). -->
+    <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+        <form class="gate-box" id="gateForm">
+            <h2 class="gate-title" id="gateTitle">원내이미지 생성기</h2>
+            <p class="gate-desc">사내 전용 도구입니다. 담당자에게 받은 암호를 입력해 주세요.</p>
+            <input type="password" id="gateInput" class="gate-input" autocomplete="current-password"
+                   placeholder="암호" aria-label="진입 암호" spellcheck="false">
+            <button type="submit" class="gate-btn">들어가기</button>
+            <p class="gate-error" id="gateError" role="alert" aria-live="polite"></p>
+        </form>
+    </div>
+
     <div class="bg-blur">
         <div class="blob" style="top:5%;left:5%;"></div>
         <div class="blob" style="top:65%;left:75%;width:360px;height:360px;background:var(--accent);"></div>
@@ -430,6 +443,7 @@
     <!-- ===== 화면 고정 경고 배너 (편집 위치와 무관하게 항상 보임) ===== -->
     <div id="floatingWarn" class="floating-warn" role="status" aria-live="polite" hidden></div>
 
+    <script src="gate.js"></script>
     <script src="main.js?v=20260624b"></script>
 </body>
 </html>
