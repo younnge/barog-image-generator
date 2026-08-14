@@ -24,8 +24,10 @@ const TEST_HASH = sha(SALT + ':' + TEST_PW);
 const GATE_FOR_TEST = GATE.replace(/const GATE_HASH = '[0-9a-f]{64}'/, `const GATE_HASH = '${TEST_HASH}'`);
 
 /* gate.js 를 브라우저 흉내 컨텍스트에서 돌리고, 열림 여부를 돌려준다. */
-function runGate({ saved = null, typed = null } = {}) {
+function runGate({ saved = null, typed = null, mode = null, today = '2026-08-14' } = {}) {
     const store = saved === null ? {} : { a4GateOk: saved };
+    let src = GATE_FOR_TEST;
+    if (mode) src = src.replace(/const GATE_REMEMBER = '\w+'/, `const GATE_REMEMBER = '${mode}'`);
     const els = {
         gate: makeElement('div', 'gate'),
         gateInput: makeElement('input', 'gateInput'),
@@ -37,6 +39,10 @@ function runGate({ saved = null, typed = null } = {}) {
     const sandbox = {
         console, Math, JSON, String, Array, Object, Uint8Array, Promise, Error,
         TextEncoder,
+        // 날짜를 고정해 '하루 1회' 만료를 결정적으로 검증한다
+        Date: class extends Date {
+            constructor(...a) { super(...(a.length ? a : [today + 'T09:00:00'])); }
+        },
         crypto: {
             subtle: {
                 async digest(_alg, bytes) {
@@ -56,7 +62,7 @@ function runGate({ saved = null, typed = null } = {}) {
         },
     };
     vm.createContext(sandbox);
-    vm.runInContext(GATE_FOR_TEST, sandbox);
+    vm.runInContext(src, sandbox);
     domReady();
 
     const submit = async () => {
@@ -96,19 +102,50 @@ test('빈 입력은 아무 일도 하지 않는다', async () => {
     assert.strictEqual(g.error(), '');
 });
 
-group('기억');
+group('기억 — forever (기본)');
 
-test('통과하면 다음 방문에는 묻지 않는다', async () => {
-    const g = runGate({ typed: TEST_PW });
+const record = (h, d) => JSON.stringify({ h, d });
+
+test('통과하면 해시와 날짜를 함께 기록한다', async () => {
+    const g = runGate({ typed: TEST_PW, today: '2026-08-14' });
     await g.submit();
-    assert.strictEqual(g.store.a4GateOk, TEST_HASH, '통과 표시가 저장되어야 함');
-    const again = runGate({ saved: TEST_HASH });
-    assert.ok(again.opened(), '저장된 표시가 있는데 다시 물어봄');
+    assert.strictEqual(g.store.a4GateOk, record(TEST_HASH, '2026-08-14'));
 });
 
-test('암호를 바꾸면 기존 표시는 무효가 된다', () => {
-    const g = runGate({ saved: 'a'.repeat(64) });   // 예전 해시
-    assert.ok(!g.opened(), '옛 표시로 통과되면 암호 변경이 무의미해짐');
+test('날짜가 지나도 다시 묻지 않는다', () => {
+    const g = runGate({ saved: record(TEST_HASH, '2020-01-01'), today: '2026-08-14' });
+    assert.ok(g.opened(), 'forever 인데 오래된 기록으로 다시 물어봄');
+});
+
+test('암호를 바꾸면 기존 기록은 무효가 된다', () => {
+    const g = runGate({ saved: record('a'.repeat(64), '2026-08-14') });
+    assert.ok(!g.opened(), '옛 해시로 통과되면 암호 변경이 무의미해짐');
+});
+
+test('손상된 기록은 안전하게 무시한다', () => {
+    ['', '{', 'null', '[]', TEST_HASH].forEach(bad => {
+        const g = runGate({ saved: bad });
+        assert.ok(!g.opened(), `손상된 값으로 열림: ${JSON.stringify(bad)}`);
+    });
+});
+
+group('기억 — daily (하루 1회)');
+
+test('같은 날 재접속은 묻지 않는다', () => {
+    const g = runGate({ mode: 'daily', saved: record(TEST_HASH, '2026-08-14'), today: '2026-08-14' });
+    assert.ok(g.opened(), '같은 날인데 다시 물어봄');
+});
+
+test('날짜가 바뀌면 그날 첫 접속에 다시 묻는다', () => {
+    const g = runGate({ mode: 'daily', saved: record(TEST_HASH, '2026-08-13'), today: '2026-08-14' });
+    assert.ok(!g.opened(), '날짜가 바뀌었는데 그냥 통과함');
+});
+
+test('다시 입력하면 그날 날짜로 갱신된다', async () => {
+    const g = runGate({ mode: 'daily', saved: record(TEST_HASH, '2026-08-13'), typed: TEST_PW, today: '2026-08-14' });
+    await g.submit();
+    assert.ok(g.opened());
+    assert.strictEqual(g.store.a4GateOk, record(TEST_HASH, '2026-08-14'));
 });
 
 group('잠금 상태 표시');
@@ -134,6 +171,11 @@ test('GATE_HASH 가 올바른 형식이고 자리표시자가 아니다', () => 
     WEAK.forEach(w => {
         assert.notStrictEqual(REAL_HASH, sha(SALT + ':' + w), `약한 암호 '${w}' 가 설정돼 있음`);
     });
+});
+
+test('GATE_REMEMBER 가 지원하는 값이다', () => {
+    const mode = /const GATE_REMEMBER = '(\w+)'/.exec(GATE)[1];
+    assert.ok(['forever', 'daily'].includes(mode), `알 수 없는 모드: ${mode}`);
 });
 
 group('마크업 · 걷어내기 용이성');

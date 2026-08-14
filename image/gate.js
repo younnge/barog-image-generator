@@ -13,6 +13,29 @@ const GATE_SALT = 'barog-image-generator';   // 레인보우 테이블 무력화
 const GATE_HASH = '1e7769993b7910b834bf5ee715e284b57d2c284e7c67ab13e65da1a67e2d1876';
 const GATE_KEY = 'a4GateOk';
 
+/* 한 번 통과한 컴퓨터에서 언제 다시 물을지.
+ *   'forever' — 다시 묻지 않는다(기본). 브라우저 데이터를 지우거나 암호를 바꿀 때만 재입력.
+ *   'daily'   — 날짜가 바뀌면 그날 첫 접속에 한 번만 묻는다. 그 뒤 재접속·새로고침은 통과.
+ * 여러 사람이 한 PC 를 돌려 쓰는 자리라면 'daily' 가 낫다. */
+const GATE_REMEMBER = 'forever';
+
+/* 오늘 날짜(로컬 기준) — 'daily' 모드에서 통과 기록과 비교한다. */
+function gateToday() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/* 저장된 통과 기록이 아직 유효한가.
+ * 암호가 바뀌면 해시가 달라져 자동으로 무효가 된다(모드와 무관). */
+function gateRecordValid(raw) {
+    if (!raw) return false;
+    let rec;
+    try { rec = JSON.parse(raw); } catch (e) { return false; }   // 옛 형식(해시 문자열)은 버린다
+    if (!rec || rec.h !== GATE_HASH) return false;
+    if (GATE_REMEMBER === 'daily') return rec.d === gateToday();
+    return true;
+}
+
 async function gateDigest(text) {
     const bytes = new TextEncoder().encode(text);
     const buf = await crypto.subtle.digest('SHA-256', bytes);
@@ -35,7 +58,7 @@ function initGate() {
     // 이미 통과한 브라우저는 그대로 통과. 암호를 바꾸면 해시가 달라져 다시 물어본다.
     let saved = null;
     try { saved = localStorage.getItem(GATE_KEY); } catch (e) { /* 저장 차단 브라우저 */ }
-    if (saved === GATE_HASH) { gateOpen(); return; }
+    if (gateRecordValid(saved)) { gateOpen(); return; }
 
     document.body.classList.add('gate-locked');
     input?.focus();
@@ -61,7 +84,10 @@ function initGate() {
             gate.classList.add('gate-shake');
             return;
         }
-        try { localStorage.setItem(GATE_KEY, hash); } catch (e) { /* 저장 실패해도 이번 방문은 통과 */ }
+        // 통과 기록 = 해시 + 통과한 날짜. 해시로 암호 변경을, 날짜로 'daily' 만료를 판단한다.
+        try {
+            localStorage.setItem(GATE_KEY, JSON.stringify({ h: hash, d: gateToday() }));
+        } catch (e) { /* 저장 실패해도 이번 방문은 통과 — 다음 접속에 다시 묻는다 */ }
         if (error) error.textContent = '';
         gateOpen();
     });
