@@ -10,7 +10,7 @@
  * 암호 변경:  node tools/set-password.js "새암호"  → 출력된 GATE_HASH 로 교체
  */
 const GATE_SALT = 'barog-image-generator';   // 레인보우 테이블 무력화용 — 비밀이 아님
-const GATE_HASH = '1e7769993b7910b834bf5ee715e284b57d2c284e7c67ab13e65da1a67e2d1876';
+const GATE_HASH = '60b6edb98a5bd2ced6b5b8cc3f8e6e5e1e9d0268d110d6691358cf9863ffe36a';
 const GATE_KEY = 'a4GateOk';
 
 /* 한 번 통과한 컴퓨터에서 언제 다시 물을지.
