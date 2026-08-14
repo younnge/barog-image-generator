@@ -13,11 +13,12 @@ let isBackedUp = true;
 let activeColumnTab = 'left';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
 let balanceBottomExact = false;  // 균등 맞춤 시 두 컬럼 하단을 bottomY에 정확히 일치(A토글) — 기본 OFF
-let autoFitOnePage = false;      // 한 장에 자동 맞춤: 매 렌더마다 한 페이지에 들어가는 최대 크기 자동 적용 — 기본 OFF
 let boxCornerStyle = 'round';    // 이벤트 박스 모서리: 'sharp'(뾰족) | 'soft'(살짝) | 'round'(둥글게)
 let itemDividerStyle = 'solid';  // 항목 구분선: 'none' | 'dotted' | 'dashed' | 'solid'
 let docLang = 'ko';              // 문서 언어(폰트 우선순위) — 입력 문구에서 자동 판별. detectDocLang 참고
-let manualTextScale = 100;       // 사용자가 슬라이더로 직접 설정한 전체 텍스트 크기(%) — 자동맞춤 해제 시 이 값으로 복원
+// 슬라이더로 직접 설정한 전체 텍스트 크기(%). '한 장에 자동 맞춤'을 없앤 뒤로 읽는 곳이 없어
+// 실제 렌더에는 영향을 주지 않지만, 기존 백업 파일이 이 필드를 담고 있어 스키마 호환을 위해 남긴다.
+let manualTextScale = 100;
 let balanceSnapshot = null;   // 균등 맞춤 켜기 직전 상태(DOM 순서·텍스트 크기) — 끌 때 원상복구용
 let balanceAutoBreak = null;  // 균등 맞춤 켤 때 자동 생성한 컬럼 구분선(끌 때 이 노드만 제거)
 let balanceStale = false;     // 균등 맞춤 켠 뒤 내용이 바뀌어 재정렬이 필요한 상태
@@ -285,7 +286,6 @@ function getSnapshot() {
         balanced: layoutBalanced,
         bottomExact: balanceBottomExact,
         gapLinked: gapLinked,
-        autoFit: autoFitOnePage,
         boxCorner: boxCornerStyle,
         itemDivider: itemDividerStyle,
         manualTextScale: manualTextScale,
@@ -332,7 +332,6 @@ function restoreSnapshot(data) {
     gapLinked = data.gapLinked !== undefined
         ? !!data.gapLinked
         : (data.sectionGapRight === undefined || data.sectionGapRight === data.sectionGap);
-    autoFitOnePage = false;   // '자동으로 한 장에 맞춤' 기능 제거 — 텍스트 크기는 항상 수동
     // 박스 모서리·항목 구분선(없던 기존 저장본은 기본값 유지).
     // 문서 언어는 복원하지 않는다 — 항목을 다 채운 뒤 렌더 직전에 문구로 자동 판별한다.
     if (BOX_CORNER_RADIUS[data.boxCorner] !== undefined) boxCornerStyle = data.boxCorner;
@@ -340,7 +339,6 @@ function restoreSnapshot(data) {
     syncOptSegUI();
     // 사용자 수동 텍스트 크기 복원(없으면 저장된 슬라이더 값으로 폴백)
     manualTextScale = (data.manualTextScale !== undefined ? parseInt(data.manualTextScale) : parseInt(data.textScale)) || 100;
-    syncOnePageUI();
     updateBalanceBtn();
     if (data.topText !== undefined) { const el = document.getElementById('topText'); el.value = data.topText; autoResizeTextarea(el); }
     if (data.periodText !== undefined) document.getElementById('periodText').value = data.periodText;
@@ -2906,42 +2904,6 @@ function availableContentHeight() {
     return (H - MARGIN) - (headerH + (headerH > 0 ? HEADER_CONTENT_GAP : MARGIN));
 }
 
-/* '균등 맞춤' 시 1회성 자동 크기: 페이지를 넘치지 않는 최대 전체 크기를 슬라이더에 적용.
- * 크기 탐색은 applyOnePageFit(이분탐색)와 동일 로직 공유 — 결과 동일, 측정 81회→~7회. */
-function autoFitTextScale() {
-    const pages = parseDomToPages();
-    if (!pages.length) return;
-    pages.forEach(page => page.rows.forEach(row => { if (row.type === 'split' && row.right.length === 0) balanceRow(row); }));
-    applyOnePageFit(pages);
-}
-
-/* 슬라이더 값 설정(라벨·배경 동기화). */
-function setTextScaleValue(v) {
-    const slider = document.getElementById('textScale');
-    if (slider) slider.value = v;
-    const label = document.getElementById('textScaleLabel');
-    if (label) label.value = v;
-    if (slider) updateSliderBg(slider);
-}
-/* 헤더 높이 슬라이더 값 설정(라벨·배경 동기화). */
-function setHeaderHeightValue(v) {
-    const slider = document.getElementById('headerHeight');
-    if (slider) slider.value = v;
-    const label = document.getElementById('headerHeightLabel');
-    if (label) label.value = v;
-    if (slider) updateSliderBg(slider);
-}
-
-/* '한 장에 자동 맞춤' UI 동기화: 켜지면 수동 슬라이더를 잠가(자동 제어) 혼동을 막는다. */
-function syncOnePageUI() {
-    const slider = document.getElementById('textScale');
-    const label = document.getElementById('textScaleLabel');
-    const cb = document.getElementById('autoFitOnePage');
-    if (cb) cb.checked = autoFitOnePage;
-    if (slider) slider.disabled = autoFitOnePage;
-    if (label) label.disabled = autoFitOnePage;
-    document.getElementById('textScaleGroup')?.classList.toggle('auto-locked', autoFitOnePage);
-}
 
 /* 세그먼트 선택(항목 구분선·박스 모서리) 버튼의 활성 표시를 현재 상태에 맞춘다. */
 function syncOptSegUI() {
@@ -2990,23 +2952,6 @@ function mirrorGapRight() {
     if (rl) rl.value = left.value;
 }
 
-/* 주어진(이미 균형 처리된) pages 를 한 장에 담는 최대 크기(70~150%)를 찾아 슬라이더에 반영.
- * 다 담기면 true, 70%로도 넘치면 false 반환(호출측에서 '항목 줄이기' 경고). */
-function applyOnePageFit(pages) {
-    if (!pages.length) return true;
-    const available = availableContentHeight();
-    // 높이는 크기에 단조 증가 → 이분탐색으로 들어가는 최대 크기 탐색(매 렌더 호출이라 81회→~7회)
-    let lo = 70, hi = 150, best = null;
-    while (lo <= hi) {
-        const mid = (lo + hi) >> 1;
-        if (measurePageHeightAtScale(pages[0], mid / 100) <= available) { best = mid; lo = mid + 1; }
-        else hi = mid - 1;
-    }
-    const fits = best !== null;
-    setTextScaleValue(fits ? best : 70);
-    return fits;
-}
-
 function generateImages() {
     syncDocLang();   // 폰트 체인부터 확정 — 이후 측정·그리기가 모두 같은 폰트를 쓰게
     const pages = parseDomToPages();
@@ -3031,10 +2976,6 @@ function generateImages() {
     }
 
     if (statusChip) { statusChip.textContent = '생성 중…'; statusChip.className = 'status-chip generating'; }
-
-    // 한 장에 자동 맞춤: 균형 처리까지 끝난 pages 기준으로 들어가는 최대 크기를 슬라이더에 반영.
-    // 70%로도 안 들어가면 fitOk=false → 아래에서 '항목 줄이기' 안내.
-    const fitOk = autoFitOnePage ? applyOnePageFit(pages) : true;
 
     const themeColor = document.getElementById('themeHex')?.value || '#000000';
     const numColor = document.getElementById('numColorHex')?.value || '#000000';
@@ -3087,10 +3028,7 @@ function generateImages() {
 
             // 경고 메시지 1곳에서 계산 → 상단 상태칩 + 화면 고정 배너 동기화
             let warnMsg = '';
-            if (overflow && autoFitOnePage && !fitOk) {
-                // 자동 맞춤이 최소(70%)까지 줄여도 한 장에 안 들어감 → 내용 자체를 줄여야 함
-                warnMsg = '⚠ 최소 크기로도 한 장에 다 담기지 않습니다 — 항목 수를 줄이거나 좌우 2단으로 나누세요';
-            } else if (overflow) {
+            if (overflow) {
                 warnMsg = '⚠ 내용이 넘쳐 일부가 잘렸습니다 — 텍스트 크기 축소·컬럼 분리 권장';
             } else if (headerTextDropped) {
                 warnMsg = '⚠ 헤더 높이가 0이라 제목·기간이 표시되지 않습니다';
@@ -3645,40 +3583,6 @@ function rebalanceLayout() {
     applyColumnTabFilter();
 }
 
-/* '한 번에 자동 맞춤': 좌우 2단 균형 + 위·아래 끝 맞춤 + 텍스트 크기 + 헤더 높이를
- * 한 번에 자동 계산해 결과를 슬라이더·토글에 채워 넣는다. (슬라이더는 이후 수동 조절 가능)
- * 헤더 제목은 22px 고정이라 1줄이면 '제목/기간 있으면 5%, 없으면 0%'면 충분하고,
- * 제목을 Enter 로 여러 줄 쓴 경우 늘어난 줄(약 28px ≈ 2%)만큼 헤더를 더 확보한다. */
-function autoLayoutAll() {
-    // ① 헤더 높이 자동: 헤더 텍스트(제목·기간·우측문구) 유무 + 제목 줄 수로 결정
-    const topVal = (document.getElementById('topText')?.value || '').trim();
-    const hasHeaderText = !!(topVal
-        || (document.getElementById('periodText')?.value || '').trim()
-        || (document.getElementById('periodNote')?.value || '').trim());
-    const titleExtraLines = topVal ? topVal.split('\n').length - 1 : 0;
-    setHeaderHeightValue(hasHeaderText ? Math.min(55, 5 + titleExtraLines * 2) : 0);
-
-    // ② 좌우 2단 균형(켜진 상태로 새로 맞춤 — 섹션이 적으면 reorderDomBalanced가 알아서 단일 유지)
-    if (layoutBalanced) restoreBalanceSnapshot();   // 이전 균형 흔적(자동 구분선 등) 정리
-    layoutBalanced = true;
-    balanceStale = false;
-    captureBalanceSnapshot();
-    reorderDomBalanced();
-
-    // ③ 위·아래 끝까지 채우기 ON (페이지 배치 = '끝까지 채움')
-    balanceBottomExact = true;
-
-    // ④ 텍스트 크기: 위에서 정한 헤더를 반영해 한 장에 들어가는 최대 크기로
-    autoFitTextScale();
-
-    refreshAccordionVisibility();
-    refreshBookmarks();
-    applyColumnTabFilter();
-    updateBalanceBtn();            // 페이지 배치 세그먼트를 '끝까지 채움'으로 표시
-    generateImages();
-    saveSnapshot();
-    showColorToast('한 번에 자동 맞춤 완료 — 슬라이더로 미세 조정할 수 있어요');
-}
 /* 페이지 배치 세그먼트·설명문·'다시 맞추기' 버튼을 현재 상태에 맞춘다. */
 function updateBalanceBtn() {
     syncSectionGapUI();   // 배치 단계에 따라 섹션 간격 슬라이더 잠금 동기화
@@ -3956,15 +3860,6 @@ window.onload = () => {
         saveSnapshot();
     });
 
-    // 한 장에 자동 맞춤 토글: 켜면 슬라이더 잠그고 자동 최적 크기, 끄면 수동
-    document.getElementById('autoFitOnePage')?.addEventListener('change', e => {
-        autoFitOnePage = e.target.checked;
-        syncOnePageUI();
-        if (!autoFitOnePage) setTextScaleValue(manualTextScale);   // 해제 시 사용자가 설정했던 크기로 복원
-        generateImages();   // 켜짐: 즉시 자동 맞춤 적용 / 꺼짐: 사용자 수동 값으로 렌더
-        saveSnapshot();
-    });
-    syncOnePageUI();   // 초기 잠금 상태 반영
     syncSectionGapUI();   // 섹션 간격 슬라이더 초기 잠금·묶음 상태 반영
     updateBalanceBtn();   // 페이지 배치 세그먼트 초기 표시
 
@@ -4219,7 +4114,6 @@ window.onload = () => {
         });
     });
     document.getElementById('btnToggleAll').addEventListener('click', toggleAllSections);
-    document.getElementById('btnAutoAll')?.addEventListener('click', autoLayoutAll);
 
     // 페이지 배치 — 그대로 / 높이 맞춤 / 끝까지 채움
     document.getElementById('pageLayoutSeg')?.addEventListener('click', e => {

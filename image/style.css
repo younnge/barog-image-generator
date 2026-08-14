@@ -113,6 +113,17 @@ body {
     background: var(--surface);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
+/* 제목 + 사용설명서 링크 — 도움말이 앱 안에서 도달 가능해야 신규 사용자가 찾는다 */
+.head-title-row { display: flex; align-items: center; gap: 10px; }
+.head-title-row h1 { flex: 1; min-width: 0; }
+.help-link {
+    display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+    font-size: 11.5px; font-weight: 600; text-decoration: none;
+    color: var(--text-muted); background: rgba(0,0,0,0.04);
+    padding: 5px 10px; border-radius: 7px; transition: all .15s ease;
+}
+.help-link:hover { background: var(--primary-light); color: var(--primary); }
+.help-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 .input-card h1 {
     font-size: 17px; font-weight: 700; color: var(--text-main);

@@ -3,29 +3,14 @@
  *
  * main.js 는 클래식 스크립트(전역 함수 선언)이므로 vm 샌드박스에서 평가한 뒤
  * 캔버스가 필요 없는 순수 함수만 골라 검증한다. */
-const fs = require('fs');
-const vm = require('vm');
 const assert = require('assert');
-const path = require('path');
+const { group, test, report } = require('./helpers/tinytest');
+const { createSandbox } = require('./helpers/sandbox');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-// 최상위에서 참조하는 브라우저 전역만 최소 스텁(함수 본문은 실행되지 않음).
-// main.js 는 로드 시점에 전역 오류 핸들러를 등록하므로 addEventListener 가 있어야 한다.
-const sandbox = {
-    window: { addEventListener() {} }, document: {}, console, Math, JSON, String, Array, RegExp, Object,
-    parseInt, parseFloat, Set, Map, Uint8Array, isNaN
-};
-vm.createContext(sandbox);
-vm.runInContext(src, sandbox);
-
-let passed = 0, failed = 0;
-function test(name, fn) {
-    try { fn(); passed++; console.log('  ✓ ' + name); }
-    catch (e) { failed++; console.log('  ✗ ' + name + '\n      ' + e.message); }
-}
+const { sandbox } = createSandbox();
 const textOf = chunks => chunks.map(c => c.text).join('');
 
-console.log('DSL 파서 (서식 토큰)');
+group('DSL 파서 (서식 토큰)');
 test('일반 텍스트는 그대로 보존', () => {
     assert.strictEqual(textOf(sandbox.parseStyledText('아쿠아필(블랙헤드)')), '아쿠아필(블랙헤드)');
 });
@@ -76,7 +61,7 @@ test('여는<가 정상 중첩 토큰은 깨지 않음', () => {
     assert.ok(c.some(ch => ch.isHighlight && ch.text === '강조'));
 });
 
-console.log('가격 텍스트 토큰화');
+group('가격 텍스트 토큰화');
 test('숫자/단위 분리', () => {
     const t = sandbox.tokenizePriceText('20만원');
     assert.strictEqual(JSON.stringify(t.map(x => x.type)), JSON.stringify(['num', 'unit']));
@@ -88,7 +73,7 @@ test('콤마 포함 숫자도 num 으로', () => {
     assert.strictEqual(t[0].text, '1,200');
 });
 
-console.log('높이 균형 분할 (partitionByHeight)');
+group('높이 균형 분할 (partitionByHeight)');
 test('동일 높이 4개는 2:2로 균형', () => {
     const inLeft = sandbox.partitionByHeight([10, 10, 10, 10]);
     const l = inLeft.filter(Boolean).length;
@@ -101,7 +86,7 @@ test('합이 같아지도록 최적 분할 (3,1,1,1 → 3 | 1,1,1)', () => {
     assert.strictEqual(sum(false), 3);
 });
 
-console.log('이름 블록 높이 (nameBlockHeight)');
+group('이름 블록 높이 (nameBlockHeight)');
 test('한 줄이면 줄높이 그대로', () => {
     assert.strictEqual(sandbox.nameBlockHeight([20], 1.2), 20);
 });
@@ -110,7 +95,7 @@ test('두 줄: 첫/끝 반높이 + 줄간격 배수', () => {
     assert.strictEqual(sandbox.nameBlockHeight([20, 20], 1.2), 44);
 });
 
-console.log('의료법 위반 감지 (checkMedicalLaw)');
+group('의료법 위반 감지 (checkMedicalLaw)');
 test('금지어 감지 + 대체어 제공', () => {
     const v = sandbox.checkMedicalLaw('신데렐라주사 이벤트');
     assert.ok(v.some(x => x.word === '신데렐라주사' && x.replacement === '티옥트산주사'));
@@ -123,7 +108,4 @@ test('위반 없는 문구는 빈 배열', () => {
     assert.strictEqual(sandbox.checkMedicalLaw('보톡스 이벤트').length, 0);
 });
 
-console.log('\n' + (failed === 0
-    ? `전체 통과 ✓  (${passed} passed)`
-    : `실패 ${failed}건 / 통과 ${passed}건`));
-process.exit(failed === 0 ? 0 : 1);
+if (require.main === module) process.exit(report('logic'));
