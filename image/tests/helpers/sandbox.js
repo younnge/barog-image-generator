@@ -70,7 +70,18 @@ function makeElement(tag = 'div', id = '', bag = null) {
         },
         matches(sel) { return String(sel).split(',').some(s => cls.has(s.trim().replace(/^\./, ''))); },
         closest() { return null; },
-        querySelector() { return null; },
+        /* innerHTML 템플릿을 파싱하지 않으므로, 스모크 테스트(autoCreate)에서는
+         * 조회한 셀렉터마다 대역 노드를 만들어 돌려준다. 같은 셀렉터는 같은 노드를 준다. */
+        querySelector(sel) {
+            if (!(bag && bag.autoCreate)) return null;
+            const cache = this._qsCache || (this._qsCache = {});
+            if (!cache[sel]) {
+                const stub = makeElement('div', '', bag);
+                String(sel).split(',').forEach(s => stub.classList.add(s.trim().replace(/^\./, '')));
+                cache[sel] = stub;
+            }
+            return cache[sel];
+        },
         querySelectorAll() { return []; },
         getBoundingClientRect: () => ({ top: 0, bottom: 20, left: 0, right: 100, width: 100, height: 20 }),
         fire(type, ev = {}) { (this._listeners[type] || []).forEach(fn => fn(Object.assign({ target: el }, ev))); },
@@ -88,16 +99,22 @@ function createSandbox(opts = {}) {
     const ctx = makeCtx(draws);
     const els = {};
     const bodyNodes = [];
+    const bag = { nodes: bodyNodes, autoCreate: !!opts.autoCreate };
     const toasts = [];
     const writes = [];
     const store = {};
     let quota = Infinity;
 
     const doc = {
-        getElementById: id => els[id] || null,
+        // autoCreate: 초기화 배선 검증용 — main.js 는 상당수 요소를 null 가드 없이 참조하므로
+        // 요청하는 id 를 즉석에서 만들어 준다(요소 존재 여부가 아니라 배선 자체를 보는 테스트).
+        getElementById(id) {
+            if (!els[id] && opts.autoCreate) els[id] = makeElement('div', id, bag);
+            return els[id] || null;
+        },
         createElement: tag => (opts.canvas && tag === 'canvas'
             ? { getContext: () => ctx, width: 0, height: 0, style: {} }
-            : makeElement(tag, '', { nodes: bodyNodes })),
+            : makeElement(tag, '', bag)),
         querySelector: () => null,
         querySelectorAll: sel => (sel === '.violation-tooltip'
             ? bodyNodes.filter(n => n.classList.contains('violation-tooltip'))
@@ -105,6 +122,8 @@ function createSandbox(opts = {}) {
         addEventListener() {},
         body: { appendChild(c) { bodyNodes.push(c); c._parent = { children: bodyNodes }; } },
         documentElement: { style: { setProperty() {} } },
+        // main.js 는 폰트 로드 후 1회 재렌더한다 — 테스트에서는 즉시 이행되지 않게 둔다
+        fonts: { ready: { then() { return this; } } },
     };
 
     const sessionStorage = {
@@ -129,7 +148,10 @@ function createSandbox(opts = {}) {
         console, Math, JSON, String, Array, RegExp, Object, Number, Date,
         parseInt, parseFloat, isNaN, Set, Map, Uint8Array,
         Image: function () {},
+        MutationObserver: function () { this.observe = () => {}; this.disconnect = () => {}; },
+        requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
         setTimeout: () => 0, clearTimeout: () => {},
+        setInterval: () => 0, clearInterval: () => {},
         getComputedStyle: () => ({ maxHeight: 'none', lineHeight: '20px' }),
         sessionStorage,
         localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
@@ -149,7 +171,7 @@ function createSandbox(opts = {}) {
         /* 최상위 let 쓰기 */
         write(name, value) { sandbox.__w = value; vm.runInContext(name + ' = __w', sandbox); },
         addElement(id, tag = 'div', classes = []) {
-            const el = makeElement(tag, id, { nodes: bodyNodes });
+            const el = makeElement(tag, id, bag);
             classes.forEach(c => el.classList.add(c));
             els[id] = el;
             return el;

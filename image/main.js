@@ -3603,8 +3603,8 @@ function updateBalanceBtn() {
 /* ============================================================
  * 초기화
  * ============================================================ */
-window.onload = () => {
-    // 탭 전환
+/* 탭 전환 */
+function initTabs() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const tab = btn.dataset.tab;
@@ -3616,8 +3616,10 @@ window.onload = () => {
             if (tab !== 'design') resizeVisibleTextareas();   // 항목 탭 표시 시 입력칸 높이 재계산
         });
     });
+}
 
-    // 색상 설정
+/* 테마·숫자·강조·항목강조·단위박스 색상 피커 */
+function initColorPickers() {
     const colorPicker = document.getElementById('themeColor');
     const hexInput = document.getElementById('themeHex');
     const swatch = document.getElementById('themeSwatch');
@@ -3756,8 +3758,10 @@ window.onload = () => {
         el.addEventListener('focus', () => { el._before = el.value; });
         el.addEventListener('blur', () => { if (el._before !== el.value) saveSnapshot(); });
     });
+}
 
-    // 슬라이더
+/* 헤더 높이 · 섹션 간격(좌·우 묶기) · 전체 텍스트 크기 */
+function initSliders() {
     const slider = document.getElementById('headerHeight');
     slider.addEventListener('input', () => {
         document.getElementById('headerHeightLabel').value = slider.value;
@@ -3871,8 +3875,10 @@ window.onload = () => {
         generateImages();
         saveSnapshot();
     });
+}
 
-    // 텍스트 색상 피커
+/* 텍스트 색상 + 제목·기간·기간 우측(의료법 검사·서식 툴바 포함) */
+function initHeaderFields() {
     const textColorPicker = document.getElementById('textColorPicker');
     const textColorHex = document.getElementById('textColorHex');
     const textColorSwatch = document.getElementById('textColorSwatch');
@@ -3970,9 +3976,10 @@ window.onload = () => {
         debouncedGenerateImages();
         handleInputSnapshot();
     });
+}
 
-
-    // 배경·로고 이미지 — 드롭존 동작(클릭·파일선택·드래그&드롭)은 완전히 동일하므로 한 곳에서 배선한다.
+/* 배경·로고 드롭존 + 로고 크기·세로 위치 슬라이더 */
+function initImageInputs() {
     // apply: 이미지가 준비됐을 때 캐시에 넣고 썸네일을 표시, clear: 선택 해제 시 초기화, isSet: 현재 들어있는지.
     const wireImageDropZone = ({ zoneId, inputId, labelMainId, clearBtnId, apply, clear, isSet }) => {
         const zone = document.getElementById(zoneId);
@@ -4075,8 +4082,10 @@ window.onload = () => {
         set: v => (logoTopPad = clampTo(v, LOGO_TOP_MIN, LOGO_TOP_MAX))
     });
     syncLogoScaleUI();
+}
 
-    // 항목 추가 버튼
+/* 항목 추가 버튼 · 좌우 탭 · 페이지 배치 세그먼트 */
+function initItemControls() {
     document.getElementById('addSectionBtn').addEventListener('click', () => {
         saveSnapshot(); markBalanceStale(); const el = addSectionTitle();
         if (activeColumnTab === 'left') {
@@ -4129,8 +4138,10 @@ window.onload = () => {
         generateImages();
         saveSnapshot();
     });
+}
 
-    // 항목 구분선 / 박스 모서리 — 세그먼트 선택. 미리보기·내보내기가 같은 렌더 경로라 즉시 반영된다.
+/* 항목 구분선 · 박스 모서리 세그먼트 */
+function initOptionSegments() {
     const bindOptSeg = (segId, apply) => {
         document.getElementById(segId)?.addEventListener('click', e => {
             const btn = e.target.closest('.opt-seg-btn');
@@ -4150,8 +4161,10 @@ window.onload = () => {
         boxCornerStyle = v; return true;
     });
     syncOptSegUI();
+}
 
-    // itemsContainer 이벤트 위임
+/* 항목 영역 이벤트 위임(입력·서식·삭제·드래그 등) */
+function initItemsContainer() {
     const container = document.getElementById('itemsContainer');
     container.addEventListener('input', e => {
         const t = e.target;
@@ -4389,8 +4402,10 @@ window.onload = () => {
             debouncedGenerateImages(); saveSnapshot();
         }
     });
+}
 
-    // 색상 프리셋
+/* 색상 프리셋 목록 */
+function initColorPresets() {
     renderAllColorPresets();
     initMiniPresetHandlers();
     document.getElementById('colorPresets')?.addEventListener('click', e => {
@@ -4421,8 +4436,10 @@ window.onload = () => {
             debouncedGenerateImages();
         }
     });
+}
 
-    // 리모컨 버튼
+/* 리모컨 버튼 · 단축키 */
+function initRemote() {
     document.getElementById('remoteUndo').addEventListener('click', undo);
     document.getElementById('remoteRedo').addEventListener('click', redo);
     document.getElementById('remoteDownload').addEventListener('click', downloadImages);
@@ -4446,8 +4463,10 @@ window.onload = () => {
 
     // CSS 변수 --h1-bar-color 를 실제 초기 테마색과 일치시킴 (style.css 기본값과 다를 수 있음)
     updateColorSync(document.getElementById('themeHex').value || '#000000');
+}
 
-    // 세션 복원 or 초기 상태
+/* 세션 복원 또는 기본 샘플 + 폰트 로드 후 재렌더 */
+function bootstrapContent() {
     const restored = restoreFromSessionStorage();
     if (!restored) {
         // 기본 샘플 로드
@@ -4471,8 +4490,11 @@ window.onload = () => {
     applyColumnTabFilter();
     initBookmarkObserver();
     refreshBookmarks();
+}
 
-    // ── 컬럼 삽입 호버 버튼 ──
+/* 항목 사이 «컬럼 분리» 호버 버튼 */
+function initColumnHoverBtn() {
+    const container = document.getElementById('itemsContainer');
     const colInsertBtn = document.createElement('button');
     colInsertBtn.id = 'colInsertBtn';
     colInsertBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><polyline points="8 7 3 12 8 17"/><polyline points="16 7 21 12 16 17"/></svg> 여기서 컬럼 분리`;
@@ -4552,4 +4574,20 @@ window.onload = () => {
 
     markSaved();
     // 리모컨은 이제 컨테이너 4번째 그리드 컬럼(sticky)이라 별도 위치 보정 불필요
+}
+
+window.onload = () => {
+    initTabs();
+    initColorPickers();
+    initSliders();
+    initHeaderFields();
+    initImageInputs();
+    initItemControls();
+    initOptionSegments();
+    initItemsContainer();
+    initColorPresets();
+    initRemote();
+    bootstrapContent();
+    initColumnHoverBtn();
+    markSaved();
 };

@@ -9,6 +9,7 @@ const FILES = [
     './render.test.js',      // 측정/그리기 일치 · 가격 그리드 · 로고 기하
     './persist.test.js',     // 백업·세션 복원 · 세션 기록 억제
     './violation.test.js',   // 의료법 검사 배선(제목·기간 포함) · 툴팁 수명
+    './init.test.js',        // window.onload 배선 스모크 — 초기화가 끝까지 도는지
 ];
 
 for (const f of FILES) {
