@@ -1,0 +1,29 @@
+# 워크플로는 저장소 루트의 .github/workflows/ 에 있어야 GitHub Actions 가 인식한다.
+# 앱 코드는 image/ 아래에 있으므로 모든 run 단계를 그 디렉터리에서 실행한다.
+name: test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: image
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 구문 검사
+        run: node --check main.js
+
+      - name: 단위 테스트
+        run: npm test
