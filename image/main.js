@@ -8,6 +8,7 @@ let bgFileName = '';   // 배경 이미지 파일명 — 저장/복원 시 드�
 let cachedLogoImg = null;   // 상단 로고(병원 로고 등) — 넣으면 제목·기간이 그만큼 아래로 내려간다
 let logoFileName = '';
 let logoSizePct = 100;        // 로고 크기(%) 50~150, 5 단위
+let logoTopPad = 26;          // 페이지 상단 ~ 로고 여백(px) — 키우면 로고와 제목이 함께 내려간다
 let isBackedUp = true;
 let activeColumnTab = 'left';
 let layoutBalanced = false;   // '좌우 균등 맞춤' 버튼 상태 (켜면 높이 균형 배분 + 간격 균등 분배)
@@ -15,11 +16,12 @@ let balanceBottomExact = false;  // 균등 맞춤 시 두 컬럼 하단을 botto
 let autoFitOnePage = false;      // 한 장에 자동 맞춤: 매 렌더마다 한 페이지에 들어가는 최대 크기 자동 적용 — 기본 OFF
 let boxCornerStyle = 'round';    // 이벤트 박스 모서리: 'sharp'(뾰족) | 'soft'(살짝) | 'round'(둥글게)
 let itemDividerStyle = 'solid';  // 항목 구분선: 'none' | 'dotted' | 'dashed' | 'solid'
-let docLang = 'ko';              // 문서 언어(폰트 우선순위): 'ko' | 'ja' | 'zhCN' | 'zhTW' | 'th'. 영어는 어느 값에서나 지원
+let docLang = 'ko';              // 문서 언어(폰트 우선순위) — 입력 문구에서 자동 판별. detectDocLang 참고
 let manualTextScale = 100;       // 사용자가 슬라이더로 직접 설정한 전체 텍스트 크기(%) — 자동맞춤 해제 시 이 값으로 복원
 let balanceSnapshot = null;   // 균등 맞춤 켜기 직전 상태(DOM 순서·텍스트 크기) — 끌 때 원상복구용
 let balanceAutoBreak = null;  // 균등 맞춤 켤 때 자동 생성한 컬럼 구분선(끌 때 이 노드만 제거)
 let balanceStale = false;     // 균등 맞춤 켠 뒤 내용이 바뀌어 재정렬이 필요한 상태
+let gapLinked = true;         // 좌·우 섹션 간격을 같은 값으로 묶음 — 끄면 우측을 따로 조절
 let undoHistory = [];
 let redoHistory = [];
 const MAX_UNDO = 100;
@@ -32,6 +34,7 @@ const BG_LABEL_DEFAULT = '파일 선택 또는 드래그 (선택사항)';   // �
 const MAX_BG_NAME_LEN = 120;   // 복원한 파일명 표시 길이 상한(비정상 파일이 레이아웃을 깨뜨리지 않게)
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;   // 배경·로고 업로드 크기 상한
 const LOGO_SCALE_MIN = 50, LOGO_SCALE_MAX = 150, LOGO_SCALE_DEFAULT = 100;
+const LOGO_TOP_MIN = 0, LOGO_TOP_MAX = 250, LOGO_TOP_DEFAULT = 26;   // 페이지 상단 ~ 로고(px)
 const SCHEMA_VERSION = 1;   // 저장 스키마 버전 — 향후 구조 변경 시 마이그레이션 분기 기준
 const MAX_RESTORE_ITEMS = 2000;   // 백업 복원 시 항목 수 상한(손상/악성 파일 DoS 방지)
 
@@ -222,15 +225,16 @@ function getSnapshot() {
         labelBoxColor: document.getElementById('labelBoxColorHex')?.value || '#000000',
         headerHeight: document.getElementById('headerHeight')?.value || '5',
         logoScale: logoSizePct,   // 백업 키는 슬라이더 이름과 동일하게
+        logoTop: logoTopPad,
         textScale: document.getElementById('textScale')?.value || '100',
         sectionGap: document.getElementById('sectionGap')?.value || '15',
         sectionGapRight: document.getElementById('sectionGapRight')?.value || '15',
         balanced: layoutBalanced,
         bottomExact: balanceBottomExact,
+        gapLinked: gapLinked,
         autoFit: autoFitOnePage,
         boxCorner: boxCornerStyle,
         itemDivider: itemDividerStyle,
-        docLang: docLang,
         manualTextScale: manualTextScale,
         items
     };
@@ -270,16 +274,16 @@ function restoreSnapshot(data) {
     layoutBalanced = !!data.balanced;
     // 복원은 새 기준선 — 이전 DOM을 가리키던 균등 맞춤 상태는 모두 초기화
     balanceSnapshot = null; balanceAutoBreak = null; balanceStale = false;
-    if (data.bottomExact !== undefined) {
-        balanceBottomExact = !!data.bottomExact;
-        const cb = document.getElementById('balanceBottomExact');
-        if (cb) cb.checked = balanceBottomExact;
-    }
+    if (data.bottomExact !== undefined) balanceBottomExact = !!data.bottomExact;
+    // 좌·우 간격 묶기(없던 기존 저장본은 두 값이 같을 때만 묶인 것으로 본다)
+    gapLinked = data.gapLinked !== undefined
+        ? !!data.gapLinked
+        : (data.sectionGapRight === undefined || data.sectionGapRight === data.sectionGap);
     autoFitOnePage = false;   // '자동으로 한 장에 맞춤' 기능 제거 — 텍스트 크기는 항상 수동
-    // 박스 모서리·항목 구분선·문서 언어(없던 기존 저장본은 기본값 유지)
+    // 박스 모서리·항목 구분선(없던 기존 저장본은 기본값 유지).
+    // 문서 언어는 복원하지 않는다 — 항목을 다 채운 뒤 렌더 직전에 문구로 자동 판별한다.
     if (BOX_CORNER_RADIUS[data.boxCorner] !== undefined) boxCornerStyle = data.boxCorner;
     if (ITEM_DIVIDER_DASH[data.itemDivider] !== undefined) itemDividerStyle = data.itemDivider;
-    applyDocLang(LANG_NOTO_ORDER[data.docLang] ? data.docLang : 'ko');
     syncOptSegUI();
     // 사용자 수동 텍스트 크기 복원(없으면 저장된 슬라이더 값으로 폴백)
     manualTextScale = (data.manualTextScale !== undefined ? parseInt(data.manualTextScale) : parseInt(data.textScale)) || 100;
@@ -301,11 +305,13 @@ function restoreSnapshot(data) {
         updateSliderBg(sl);
         document.getElementById('headerHeightLabel').value = data.headerHeight;
     }
-    {   // 로고 크기(없던 기존 저장본은 기본 100%)
-        const v = parseInt(data.logoScale, 10);
-        logoSizePct = Number.isFinite(v)
-            ? Math.min(Math.max(v, LOGO_SCALE_MIN), LOGO_SCALE_MAX)
-            : LOGO_SCALE_DEFAULT;
+    {   // 로고 크기·세로 위치(없던 기존 저장본은 기본값)
+        const clamp = (raw, min, max, def) => {
+            const v = parseInt(raw, 10);
+            return Number.isFinite(v) ? Math.min(Math.max(v, min), max) : def;
+        };
+        logoSizePct = clamp(data.logoScale, LOGO_SCALE_MIN, LOGO_SCALE_MAX, LOGO_SCALE_DEFAULT);
+        logoTopPad = clamp(data.logoTop, LOGO_TOP_MIN, LOGO_TOP_MAX, LOGO_TOP_DEFAULT);
         syncLogoScaleUI();
     }
     if (data.textScale !== undefined) {
@@ -1456,6 +1462,71 @@ function applyDocLang(lang) {
     CONFIG.fonts = buildFonts(docLang);
 }
 
+/* ── 문서 언어 자동 판별 ──
+ * 겹칠 수 없는 문자 대역(태국·가나·한글)이 있으면 그것으로 확정한다.
+ * 한자만 있으면 간체/번체를 가려야 하는데, 이때만 아래 글자표로 개수를 센다.
+ * 판별이 틀려도 네 가지 Noto 가 모두 체인에 남아 있어 글자가 깨지지는 않는다
+ * (공통 한자의 획 모양만 달라짐). */
+const RE_THAI   = /[฀-๿]/;
+const RE_KANA   = /[぀-ヿ]/;
+const RE_HANGUL = /[가-힣ᄀ-ᇿ㄰-㆏]/;
+const RE_HAN    = /[一-鿿㐀-䶿]/;
+
+/* 간체/번체 판별용 글자표 — 같은 자리끼리 대응하는 쌍이다.
+ * 두 서체 모두에서 정상적으로 쓰이는 글자(干·后·只·云·里·面·台·余 등)는
+ * 오판을 부르므로 일부러 뺐다. 획이 확실히 갈리는 것만 남긴다. */
+const HANZI_SIMP = (
+    '医疗药学会国时个们这样义习书术广员价优预约万减双肤脱门问间闻闭闲阅队阴阳际险隐难观欢权劝鸡' +
+    '邓圣树戏说语请谢课读论议讯记讲认让训计订讨设访证评识诉诊词译试诗详误谁调谈谊谋谓谜谱钱银铁' +
+    '钢铜针钟锁错镜铺链钻锋镇铝钙车转轮软输较轻载辆辅马驾驶骑验骗驻骄鸟鸭鹅鸿鹤鱼鲜鲍贝财货贵费' +
+    '贸资赛赚购贴赠赞质贷账赔风飘饭饮饰饱馆饼养红级纪纯纲纳纵纷纸纹线练组细织终绍经结给绝绢绣继' +
+    '绩绪续绳维绵综绿缓编缘缝缩缴长韦齿龙龟业东爱办报边变标丰达带单点电动儿发飞关汉华获击历丽两' +
+    '灵刘乱买卖恼脑宁农齐启气签墙穷区丧扫伤声胜实势兽寿数属虽随湾为卫务献乡写寻压严亿忆应营邮与' +
+    '园远愿运杂灾赃战张专庄装状总层尝陈称迟处触传创担胆导灯递独夺妇盖巩沟构顾柜号怀坏环还积极艰' +
+    '奖阶洁仅惊竞旧剧据惧开块亏蜡兰拦栏烂垒类礼联怜炼粮辽猎临邻岭庐炉陆驴罗萝逻骂麦猫霉梦庙灭亩' +
+    '拟酿盘苹凭扑牵纤亲琼确扰热洒伞涩晒湿适帅苏态坛叹体条听厅头图团网稳雾牺虾吓显宪县响协胁兴悬' +
+    '选盐痒钥爷页拥忧渊跃郑肿众昼烛筑桩妆壮浊'
+);
+const HANZI_TRAD = (
+    '醫療藥學會國時個們這樣義習書術廣員價優預約萬減雙膚脫門問間聞閉閒閱隊陰陽際險隱難觀歡權勸雞' +
+    '鄧聖樹戲說語請謝課讀論議訊記講認讓訓計訂討設訪證評識訴診詞譯試詩詳誤誰調談誼謀謂謎譜錢銀鐵' +
+    '鋼銅針鐘鎖錯鏡鋪鏈鑽鋒鎮鋁鈣車轉輪軟輸較輕載輛輔馬駕駛騎驗騙駐驕鳥鴨鵝鴻鶴魚鮮鮑貝財貨貴費' +
+    '貿資賽賺購貼贈讚質貸賬賠風飄飯飲飾飽館餅養紅級紀純綱納縱紛紙紋線練組細織終紹經結給絕絹繡繼' +
+    '績緒續繩維綿綜綠緩編緣縫縮繳長韋齒龍龜業東愛辦報邊變標豐達帶單點電動兒發飛關漢華獲擊歷麗兩' +
+    '靈劉亂買賣惱腦寧農齊啟氣簽牆窮區喪掃傷聲勝實勢獸壽數屬雖隨灣為衛務獻鄉寫尋壓嚴億憶應營郵與' +
+    '園遠願運雜災贓戰張專莊裝狀總層嘗陳稱遲處觸傳創擔膽導燈遞獨奪婦蓋鞏溝構顧櫃號懷壞環還積極艱' +
+    '獎階潔僅驚競舊劇據懼開塊虧蠟蘭攔欄爛壘類禮聯憐煉糧遼獵臨鄰嶺廬爐陸驢羅蘿邏罵麥貓黴夢廟滅畝' +
+    '擬釀盤蘋憑撲牽纖親瓊確擾熱灑傘澀曬濕適帥蘇態壇嘆體條聽廳頭圖團網穩霧犧蝦嚇顯憲縣響協脅興懸' +
+    '選鹽癢鑰爺頁擁憂淵躍鄭腫眾晝燭築樁妝壯濁'
+);
+/* 문서 전체 텍스트로 언어를 판별. 판별 근거가 없으면 기본값(ko/zhCN). */
+function detectDocLang(text) {
+    const t = String(text || '');
+    if (RE_THAI.test(t)) return 'th';
+    if (RE_KANA.test(t)) return 'ja';
+    if (RE_HANGUL.test(t)) return 'ko';
+    if (!RE_HAN.test(t)) return 'ko';   // 숫자·영문뿐 — 한자 모양을 따질 것이 없음
+    let simp = 0, trad = 0;
+    for (const ch of t) {
+        if (HANZI_SIMP.includes(ch)) simp++;
+        else if (HANZI_TRAD.includes(ch)) trad++;
+    }
+    return trad > simp ? 'zhTW' : 'zhCN';
+}
+/* 판별에 쓸 문서 텍스트 모으기 — 헤더 3칸 + 항목 영역의 모든 입력칸
+ * (섹션 제목·항목명·단위·금액·비고가 전부 여기에 들어간다). */
+function collectDocText() {
+    const parts = ['topText', 'periodText', 'periodNote'].map(id => document.getElementById(id)?.value || '');
+    document.getElementById('itemsContainer')
+        ?.querySelectorAll('input[type="text"], textarea')
+        .forEach(el => parts.push(el.value));
+    return parts.join('\n');
+}
+/* 렌더 직전에 호출 — 측정·그리기가 모두 같은 폰트 체인을 쓰도록 가장 먼저 적용한다. */
+function syncDocLang() {
+    applyDocLang(detectDocLang(collectDocText()));
+}
+
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -1760,21 +1831,25 @@ const HEADER_CONTENT_GAP = 5;
  * 즉 로고 블록 높이 = 위 여백 + 로고 높이 + 제목까지의 간격. */
 const LOGO_BASE_H = 86;     // 크기 100% 기준 로고 높이(px, 1240×1754 캔버스 기준)
 const LOGO_MAX_W = 420;     // 100% 기준 가로 상한 — 가로로 긴 로고가 페이지 폭을 잡아먹지 않게
-const LOGO_TOP_PAD = 26;    // 페이지 상단 ~ 로고
 const LOGO_GAP = 16;        // 로고 ~ 제목
 
-/* 로고의 실제 그리기 크기와 헤더에서 차지할 높이. 로고가 없으면 null. */
-function logoMetrics(img = cachedLogoImg, scalePct = logoSizePct) {
+/* 로고의 실제 그리기 크기·세로 위치와 헤더에서 차지할 높이. 로고가 없으면 null.
+ * top 은 페이지 상단에서 로고까지의 여백이라, 키우면 로고와 제목이 함께 내려간다. */
+function logoMetrics(img = cachedLogoImg, scalePct = logoSizePct, topPad = logoTopPad) {
     if (!img || !img.width || !img.height) return null;
     const s = (Number(scalePct) || LOGO_SCALE_DEFAULT) / 100;
     let h = LOGO_BASE_H * s;
     let w = h * (img.width / img.height);
     const maxW = LOGO_MAX_W * s;
     if (w > maxW) { w = maxW; h = w * (img.height / img.width); }
-    return { w, h, blockH: LOGO_TOP_PAD + h + LOGO_GAP };
+    // 0 이 유효한 값이라 `|| 기본값` 을 쓸 수 없다. 또 Number(null) 은 NaN 이 아니라 0 이므로
+    // 값이 없는 경우(null·undefined)를 ?? 로 먼저 걸러야 0 으로 오인되지 않는다.
+    const t = Number(topPad ?? LOGO_TOP_DEFAULT);
+    const top = Math.min(Math.max(Number.isFinite(t) ? t : LOGO_TOP_DEFAULT, LOGO_TOP_MIN), LOGO_TOP_MAX);
+    return { w, h, top, blockH: top + h + LOGO_GAP };
 }
-function logoBlockHeight(img = cachedLogoImg, scalePct = logoSizePct) {
-    return logoMetrics(img, scalePct)?.blockH || 0;
+function logoBlockHeight(img = cachedLogoImg, scalePct = logoSizePct, topPad = logoTopPad) {
+    return logoMetrics(img, scalePct, topPad)?.blockH || 0;
 }
 /* 균등 맞춤 시 섹션 사이 간격 상한 — 내용이 적어도 이 이상은 벌어지지 않음(빈 느낌 방지).
  * 이 값을 키우면 더 꽉 채우고(간격↑), 줄이면 간격을 좁게 유지(하단 여백↑). */
@@ -1826,7 +1901,7 @@ function layoutColumn(ctx, sections, startY, bottomY, colW, fonts, justify, bott
 /* ============================================================
  * 캔버스 렌더링 — A4 두 컬럼 레이아웃
  * ============================================================ */
-function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false, rectSink = null, logoImg = null, logoScalePct = LOGO_SCALE_DEFAULT) {
+function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000', topText = '', periodText = '', textColor = '#000000', periodNote = '', hlColor = '#FFEB3B', itemHlColor = '#FF0000', labelBoxColor = '#000000', balance = false, bottomExact = false, rectSink = null, logoImg = null, logoScalePct = LOGO_SCALE_DEFAULT, logoTopPx = LOGO_TOP_DEFAULT) {
     const { W, H, SCALE, fonts } = CONFIG;
     const canvas = document.createElement('canvas');
     canvas.width = W * SCALE;
@@ -1843,7 +1918,7 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     // 로고가 있으면 그 블록만큼 헤더가 늘어난다 → 제목·기간이 자동으로 아래로 내려가 자리가 생김.
     // 제목·기간을 그릴지는 사용자가 정한 헤더 높이(bandH)로만 판단한다(로고 때문에 되살아나지 않게).
     const bandH = Math.round(H * headerRatio);
-    const logoM = logoMetrics(logoImg, logoScalePct);
+    const logoM = logoMetrics(logoImg, logoScalePct, logoTopPx);
     const headerH = bandH + (logoM ? logoM.blockH : 0);
 
     // 배경 이미지 — 전체 캔버스 cover
@@ -1939,7 +2014,7 @@ function drawA4Canvas(bgImg, rows, headerRatio, themeColor, numColor = '#000000'
     }
 
     // 상단 로고 — 헤더 밴드 위쪽에 가운데 정렬
-    if (logoM) ctx.drawImage(logoImg, (W - logoM.w) / 2, LOGO_TOP_PAD, logoM.w, logoM.h);
+    if (logoM) ctx.drawImage(logoImg, (W - logoM.w) / 2, logoM.top, logoM.w, logoM.h);
 
     // 제목 + 이벤트 기간 (헤더 중앙, 두 줄)
     if (bandH > 0 && (topText || periodText)) {
@@ -2810,18 +2885,40 @@ function syncOptSegUI() {
     };
     sync('itemDividerSeg', itemDividerStyle);
     sync('boxCornerSeg', boxCornerStyle);
-    sync('docLangSeg', docLang);
 }
 
-/* '섹션 간격' UI 동기화: 균등/자동 맞춤이 켜지면 간격이 자동 분배되므로 슬라이더를 잠가 혼동을 막는다. */
+/* '섹션 간격' UI 동기화: 균등/자동 맞춤이 켜지면 간격이 자동 분배되므로 슬라이더를 잠가 혼동을 막는다.
+ * 좌·우를 묶은 상태(gapLinked)면 우측 행을 감추고 라벨을 '섹션 간격'으로 되돌린다. */
 function syncSectionGapUI() {
-    // 간격이 자동 분배되는 경우는 '페이지 끝까지 채우기'가 켜졌을 때뿐 → 그때만 잠금.
-    // 양쪽 높이 맞추기만 켠 경우엔 수동 간격을 그대로 쓰므로 슬라이더를 열어둔다.
+    // 간격이 자동 분배되는 경우는 '끝까지 채움'일 때뿐 → 그때만 잠금.
+    // '높이 맞춤'만 켠 경우엔 수동 간격을 그대로 쓰므로 슬라이더를 열어둔다.
     const gapAuto = layoutBalanced && balanceBottomExact;
     ['sectionGap', 'sectionGapRight', 'sectionGapLabel', 'sectionGapRightLabel'].forEach(id => {
         const el = document.getElementById(id); if (el) el.disabled = gapAuto;
     });
     document.getElementById('sectionGapGroup')?.classList.toggle('auto-locked', gapAuto);
+
+    const row = document.getElementById('gapRightRow');
+    if (row) row.hidden = gapLinked;
+    const btn = document.getElementById('gapLinkBtn');
+    if (btn) {
+        btn.classList.toggle('linked', gapLinked);
+        btn.setAttribute('aria-pressed', gapLinked ? 'true' : 'false');
+        btn.title = gapLinked ? '좌·우 간격을 따로 조절하려면 누르세요' : '좌·우 간격을 같은 값으로 묶으려면 누르세요';
+    }
+    const text = document.getElementById('sectionGapLabelText');
+    if (text) text.textContent = gapLinked ? '섹션 간격' : '섹션 간격 (좌측)';
+}
+/* 좌·우를 묶은 상태에서는 우측 값을 좌측에 맞춰 따라가게 한다(우측 슬라이더는 숨겨져 있음). */
+function mirrorGapRight() {
+    if (!gapLinked) return;
+    const left = document.getElementById('sectionGap');
+    const right = document.getElementById('sectionGapRight');
+    if (!left || !right) return;
+    right.value = left.value;
+    updateSliderBg(right);
+    const rl = document.getElementById('sectionGapRightLabel');
+    if (rl) rl.value = left.value;
 }
 
 /* 주어진(이미 균형 처리된) pages 를 한 장에 담는 최대 크기(70~150%)를 찾아 슬라이더에 반영.
@@ -2842,6 +2939,7 @@ function applyOnePageFit(pages) {
 }
 
 function generateImages() {
+    syncDocLang();   // 폰트 체인부터 확정 — 이후 측정·그리기가 모두 같은 폰트를 쓰게
     const pages = parseDomToPages();
     if (layoutBalanced) {
         // 균등 맞춤 ON: DOM(구분선)이 이미 균형 배치를 반영하므로 그대로 신뢰.
@@ -2905,7 +3003,7 @@ function generateImages() {
             }
             sectionPreviewRects = [];   // 북마크 → 미리보기 하이라이트용 섹션 위치 맵(재생성)
             const canvases = pages.map((page, pi) =>
-                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact, { page: pi, rects: sectionPreviewRects }, cachedLogoImg, logoSizePct)
+                drawA4Canvas(cachedBgImg, page.rows, headerRatio, themeColor, numColor, topText, periodText, textColor, periodNote, hlColor, itemHlColor, labelBoxColor, layoutBalanced, layoutBalanced && balanceBottomExact, { page: pi, rects: sectionPreviewRects }, cachedLogoImg, logoSizePct, logoTopPad)
             );
 
             generatedImagesUrls = canvases.map(c => c.toDataURL('image/jpeg', 0.95));
@@ -3260,14 +3358,17 @@ function hideLogoThumb() {
     document.getElementById('logoDropZone')?.classList.remove('file-attached');
     syncLogoScaleUI();
 }
-/* 로고 크기 슬라이더 값·표시 여부 동기화. */
+/* 로고 크기·세로 위치 슬라이더 값과 표시 여부 동기화(로고가 있을 때만 노출). */
 function syncLogoScaleUI() {
     const group = document.getElementById('logoScaleGroup');
     if (group) group.hidden = !cachedLogoImg;
-    const slider = document.getElementById('logoScale');
-    if (slider) { slider.value = logoSizePct; updateSliderBg(slider); }
-    const label = document.getElementById('logoScaleLabel');
-    if (label) label.value = logoSizePct;
+    [['logoScale', 'logoScaleLabel', logoSizePct], ['logoTop', 'logoTopLabel', logoTopPad]]
+        .forEach(([sliderId, labelId, val]) => {
+            const slider = document.getElementById(sliderId);
+            if (slider) { slider.value = val; updateSliderBg(slider); }
+            const label = document.getElementById(labelId);
+            if (label) label.value = val;
+        });
 }
 
 /* ============================================================
@@ -3431,31 +3532,48 @@ function markBalanceStale() {
     updateBalanceBtn();
 }
 
-/* '좌우 균등 맞춤' 토글: 켜면 섹션 DOM·구분선을 높이 균형대로 실제 재배치 + 간격 균등 분배.
- * 끄면 켜기 직전 상태(DOM 순서·텍스트 크기)로 원상복구.
- * 켜진 채 내용이 바뀐(stale) 상태에서 누르면: 끄지 않고 원래 기준으로 다시 맞춤. */
-function toggleBalanceLayout() {
-    if (layoutBalanced && balanceStale) {
-        restoreBalanceSnapshot();      // 이전 균형 흔적(자동 구분선 등) 정리 후 원본 기준 복귀
-        captureBalanceSnapshot();      // 갱신된 내용을 새 기준으로 저장
-        reorderDomBalanced();          // 다시 좌/우 균형 배치 (텍스트 크기·간격은 손대지 않음)
-        balanceStale = false;
-    } else if (!layoutBalanced) {
+/* ── 페이지 배치 3단 세그먼트 ──
+ * 'none'(그대로) / 'balance'(높이 맞춤) / 'exact'(끝까지 채움).
+ * exact 는 balance 를 포함하는 상위 단계라, 종속 관계가 순서로 드러난다. */
+const PAGE_LAYOUT_HINT = {
+    none:    '섹션을 좌·우 컬럼에 나누지 않고 입력한 순서 그대로 배치합니다.',
+    balance: '좌·우 컬럼의 높이가 비슷해지도록 섹션을 나눕니다. 섹션 간격은 직접 정한 값 그대로예요.',
+    exact:   '좌·우 컬럼 아래 끝을 페이지 끝에 정확히 맞춥니다. 섹션 간격은 자동으로 분배됩니다.'
+};
+function currentPageLayout() {
+    if (!layoutBalanced) return 'none';
+    return balanceBottomExact ? 'exact' : 'balance';
+}
+/* 세그먼트 선택 적용. 바뀐 게 없으면 false 를 돌려 재렌더를 생략한다. */
+function applyPageLayout(mode) {
+    if (!PAGE_LAYOUT_HINT[mode] || mode === currentPageLayout()) return false;
+    const wantBalanced = mode !== 'none';
+    if (wantBalanced && !layoutBalanced) {
         layoutBalanced = true;
         balanceStale = false;
         captureBalanceSnapshot();      // 되돌리기용 원래 상태 저장
         reorderDomBalanced();          // 섹션을 높이 기준으로 좌/우에 비슷하게 분배(내용만 나눔)
-    } else {
+    } else if (!wantBalanced && layoutBalanced) {
         layoutBalanced = false;
         balanceStale = false;
         restoreBalanceSnapshot();      // 켜기 직전 배치·크기로 복원
     }
+    balanceBottomExact = mode === 'exact';
     refreshAccordionVisibility();  // 섹션 그룹/접힘 상태 갱신
     refreshBookmarks();            // 북마크(목차) 패널도 배치 반영
     applyColumnTabFilter();        // 좌측/우측 이벤트 탭 필터 갱신
-    updateBalanceBtn();
-    generateImages();
-    saveSnapshot();
+    return true;
+}
+/* 내용이 바뀐(stale) 상태에서 '다시 맞추기' — 끄지 않고 원래 기준으로 재배치. */
+function rebalanceLayout() {
+    if (!layoutBalanced) return;
+    restoreBalanceSnapshot();      // 이전 균형 흔적(자동 구분선 등) 정리 후 원본 기준 복귀
+    captureBalanceSnapshot();      // 갱신된 내용을 새 기준으로 저장
+    reorderDomBalanced();          // 다시 좌/우 균형 배치 (텍스트 크기·간격은 손대지 않음)
+    balanceStale = false;
+    refreshAccordionVisibility();
+    refreshBookmarks();
+    applyColumnTabFilter();
 }
 
 /* '한 번에 자동 맞춤': 좌우 2단 균형 + 위·아래 끝 맞춤 + 텍스트 크기 + 헤더 높이를
@@ -3478,10 +3596,8 @@ function autoLayoutAll() {
     captureBalanceSnapshot();
     reorderDomBalanced();
 
-    // ③ 위·아래 끝까지 채우기 ON
+    // ③ 위·아래 끝까지 채우기 ON (페이지 배치 = '끝까지 채움')
     balanceBottomExact = true;
-    const beCb = document.getElementById('balanceBottomExact');
-    if (beCb) beCb.checked = true;
 
     // ④ 텍스트 크기: 위에서 정한 헤더를 반영해 한 장에 들어가는 최대 크기로
     autoFitTextScale();
@@ -3489,38 +3605,26 @@ function autoLayoutAll() {
     refreshAccordionVisibility();
     refreshBookmarks();
     applyColumnTabFilter();
-    updateBalanceBtn();            // syncBottomExactUI 포함(위·아래 끝 토글 활성화)
+    updateBalanceBtn();            // 페이지 배치 세그먼트를 '끝까지 채움'으로 표시
     generateImages();
     saveSnapshot();
     showColorToast('한 번에 자동 맞춤 완료 — 슬라이더로 미세 조정할 수 있어요');
 }
+/* 페이지 배치 세그먼트·설명문·'다시 맞추기' 버튼을 현재 상태에 맞춘다. */
 function updateBalanceBtn() {
-    syncSectionGapUI();   // 균등/자동 맞춤 상태에 따라 섹션 간격 슬라이더 잠금 동기화
-    const btn = document.getElementById('btnBalance');
-    if (!btn) return;
-    btn.classList.toggle('btn-toggle-active', layoutBalanced);
-    btn.classList.toggle('btn-toggle-stale', layoutBalanced && balanceStale);
-    btn.setAttribute('aria-pressed', layoutBalanced ? 'true' : 'false');   // 토글 상태 스크린리더 노출
-    if (layoutBalanced && balanceStale) {
-        btn.textContent = '다시 맞추기 ⟳';
-        btn.title = '내용이 바뀌었습니다 — 클릭하면 양쪽 높이를 다시 맞춥니다';
-    } else {
-        btn.textContent = layoutBalanced ? '양쪽 높이 맞춤 ✓' : '양쪽 높이 맞추기';
-        btn.title = '섹션 내용을 좌·우 컬럼에 높이가 비슷하도록 나눕니다(텍스트 크기·간격은 그대로)';
-    }
-    syncBottomExactUI();
-}
-/* ③ '위·아래 끝 맞추기'는 좌우 균등 맞춤이 켜졌을 때만 의미 → 꺼져 있으면 비활성(흐림) + 안내. */
-function syncBottomExactUI() {
-    const row = document.getElementById('bottomExactRow');
-    const cb = document.getElementById('balanceBottomExact');
-    if (!row || !cb) return;
-    cb.disabled = !layoutBalanced;
-    row.classList.toggle('disabled', !layoutBalanced);
-    const desc = row.querySelector('.toggle-desc');
-    if (desc) desc.textContent = layoutBalanced
-        ? '좌우 칸 아래 끝을 페이지 끝에 맞춤'
-        : '먼저 «양쪽 높이 맞추기»를 켜면 사용할 수 있어요';
+    syncSectionGapUI();   // 배치 단계에 따라 섹션 간격 슬라이더 잠금 동기화
+    const mode = currentPageLayout();
+    document.getElementById('pageLayoutSeg')?.querySelectorAll('.opt-seg-btn').forEach(btn => {
+        const on = btn.dataset.val === mode;
+        btn.classList.toggle('opt-seg-btn-active', on);
+        btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    const hint = document.getElementById('pageLayoutHint');
+    if (hint) hint.textContent = balanceStale
+        ? '내용이 바뀌었습니다 — ‘다시 맞추기’를 누르면 좌·우 높이를 새로 계산합니다.'
+        : PAGE_LAYOUT_HINT[mode];
+    const re = document.getElementById('btnRebalance');
+    if (re) re.hidden = !(layoutBalanced && balanceStale);
 }
 
 /* ============================================================
@@ -3710,14 +3814,17 @@ window.onload = () => {
         saveSnapshot();
     });
 
-    // 섹션 간격 슬라이더 (왼쪽/오른쪽 각각 동일 배선)
+    // 섹션 간격 슬라이더 (왼쪽/오른쪽 각각 동일 배선).
+    // 좌측을 움직이면 묶인 상태에서 우측도 같이 따라간다(mirrorGapRight).
     function wireGapSlider(sliderId, labelId) {
         const slider = document.getElementById(sliderId);
         if (!slider) return;
         const input = document.getElementById(labelId);
+        const isLeft = sliderId === 'sectionGap';
         slider.addEventListener('input', () => {
             if (input) input.value = slider.value;
             updateSliderBg(slider);
+            if (isLeft) mirrorGapRight();
             debouncedGenerateImages();
             handleInputSnapshot();
         });
@@ -3729,6 +3836,7 @@ window.onload = () => {
             v = Math.min(Math.max(v, 0), 60);
             slider.value = v;
             updateSliderBg(slider);
+            if (isLeft) mirrorGapRight();
             debouncedGenerateImages();
             handleInputSnapshot();
         });
@@ -3739,6 +3847,7 @@ window.onload = () => {
             input.value = v;
             slider.value = v;
             updateSliderBg(slider);
+            if (isLeft) mirrorGapRight();
             saveSnapshot();
         });
     }
@@ -3787,8 +3896,17 @@ window.onload = () => {
         saveSnapshot();
     });
     syncOnePageUI();   // 초기 잠금 상태 반영
-    syncSectionGapUI();   // 섹션 간격 슬라이더 초기 잠금 상태 반영
-    syncBottomExactUI();   // '페이지 끝까지 채우기' 초기 활성/비활성 반영
+    syncSectionGapUI();   // 섹션 간격 슬라이더 초기 잠금·묶음 상태 반영
+    updateBalanceBtn();   // 페이지 배치 세그먼트 초기 표시
+
+    // 좌·우 간격 묶기/풀기 — 묶으면 우측 행을 감추고 좌측 값을 따라가게 한다
+    document.getElementById('gapLinkBtn')?.addEventListener('click', () => {
+        gapLinked = !gapLinked;
+        mirrorGapRight();   // 묶는 순간 좌측 값으로 통일(풀 때는 마지막 값이 그대로 남음)
+        syncSectionGapUI();
+        generateImages();
+        saveSnapshot();
+    });
 
     // 텍스트 색상 피커
     const textColorPicker = document.getElementById('textColorPicker');
@@ -3947,31 +4065,42 @@ window.onload = () => {
         clear: clearLogo, isSet: () => !!cachedLogoImg
     });
 
-    // 로고 크기 슬라이더 (50~150%, 5 단위)
-    const logoScaleSlider = document.getElementById('logoScale');
-    const logoScaleInput = document.getElementById('logoScaleLabel');
-    const setLogoScale = v => {
-        logoSizePct = Math.min(Math.max(v, LOGO_SCALE_MIN), LOGO_SCALE_MAX);
-        if (logoScaleSlider) { logoScaleSlider.value = logoSizePct; updateSliderBg(logoScaleSlider); }
+    // 로고 크기(50~150%) · 세로 위치(0~120px) — 배선이 같아 한 곳에서 처리.
+    // set 은 전역 상태에 반영하고 정리된 값을 돌려준다(범위 밖 입력을 걸러내기 위해).
+    const wireLogoSlider = ({ sliderId, labelId, def, set }) => {
+        const slider = document.getElementById(sliderId);
+        const input = document.getElementById(labelId);
+        const push = raw => {
+            const v = set(Number.isFinite(raw) ? raw : def);
+            if (slider) { slider.value = v; updateSliderBg(slider); }
+            return v;
+        };
+        slider?.addEventListener('input', () => {
+            const v = push(parseInt(slider.value, 10));
+            if (input) input.value = v;
+            debouncedGenerateImages();
+            handleInputSnapshot();
+        });
+        input?.addEventListener('input', () => {
+            const v = parseInt(input.value, 10);
+            if (isNaN(v)) return;   // 지우는 중에는 건드리지 않음 — blur 에서 정리
+            push(v);
+            debouncedGenerateImages();
+            handleInputSnapshot();
+        });
+        input?.addEventListener('blur', () => {
+            input.value = push(parseInt(input.value, 10));
+            saveSnapshot();
+        });
     };
-    logoScaleSlider?.addEventListener('input', () => {
-        setLogoScale(parseInt(logoScaleSlider.value, 10) || LOGO_SCALE_DEFAULT);
-        if (logoScaleInput) logoScaleInput.value = logoSizePct;
-        debouncedGenerateImages();
-        handleInputSnapshot();
+    const clampTo = (v, min, max) => Math.min(Math.max(v, min), max);
+    wireLogoSlider({
+        sliderId: 'logoScale', labelId: 'logoScaleLabel', def: LOGO_SCALE_DEFAULT,
+        set: v => (logoSizePct = clampTo(v, LOGO_SCALE_MIN, LOGO_SCALE_MAX))
     });
-    logoScaleInput?.addEventListener('input', () => {
-        const v = parseInt(logoScaleInput.value, 10);
-        if (isNaN(v)) return;
-        setLogoScale(v);
-        debouncedGenerateImages();
-        handleInputSnapshot();
-    });
-    logoScaleInput?.addEventListener('blur', () => {
-        const v = parseInt(logoScaleInput.value, 10);
-        setLogoScale(isNaN(v) ? LOGO_SCALE_DEFAULT : v);
-        logoScaleInput.value = logoSizePct;
-        saveSnapshot();
+    wireLogoSlider({
+        sliderId: 'logoTop', labelId: 'logoTopLabel', def: LOGO_TOP_DEFAULT,
+        set: v => (logoTopPad = clampTo(v, LOGO_TOP_MIN, LOGO_TOP_MAX))
     });
     syncLogoScaleUI();
 
@@ -4013,11 +4142,19 @@ window.onload = () => {
         });
     });
     document.getElementById('btnToggleAll').addEventListener('click', toggleAllSections);
-    document.getElementById('btnBalance').addEventListener('click', toggleBalanceLayout);
     document.getElementById('btnAutoAll')?.addEventListener('click', autoLayoutAll);
-    document.getElementById('balanceBottomExact')?.addEventListener('change', e => {
-        balanceBottomExact = e.target.checked;
-        syncSectionGapUI();   // 채우기 켜짐/꺼짐에 따라 섹션 간격 슬라이더 잠금 갱신
+
+    // 페이지 배치 — 그대로 / 높이 맞춤 / 끝까지 채움
+    document.getElementById('pageLayoutSeg')?.addEventListener('click', e => {
+        const btn = e.target.closest('.opt-seg-btn');
+        if (!btn || !applyPageLayout(btn.dataset.val)) return;   // 같은 단계면 재렌더 생략
+        updateBalanceBtn();
+        generateImages();
+        saveSnapshot();
+    });
+    document.getElementById('btnRebalance')?.addEventListener('click', () => {
+        rebalanceLayout();
+        updateBalanceBtn();
         generateImages();
         saveSnapshot();
     });
@@ -4040,10 +4177,6 @@ window.onload = () => {
     bindOptSeg('boxCornerSeg', v => {
         if (BOX_CORNER_RADIUS[v] === undefined || v === boxCornerStyle) return false;
         boxCornerStyle = v; return true;
-    });
-    bindOptSeg('docLangSeg', v => {
-        if (LANG_NOTO_ORDER[v] === undefined || v === docLang) return false;
-        applyDocLang(v); return true;   // 폰트 체인 교체 → 이어지는 generateImages 부터 반영
     });
     syncOptSegUI();
 

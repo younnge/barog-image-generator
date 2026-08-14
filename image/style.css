@@ -282,6 +282,39 @@ body {
     text-transform: uppercase; letter-spacing: .4px;
     display: flex; align-items: center; gap: 6px;
 }
+/* 카드 안 소그룹 — 얇은 구분선 + 작은 머리말로 성격이 다른 설정을 갈라 놓는다 */
+.sub-group { display: flex; flex-direction: column; gap: 11px; }
+.sub-group + .sub-group { border-top: 1px solid rgba(0,0,0,0.07); padding-top: 13px; }
+.sub-group-title {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .3px;
+    color: var(--text-tertiary); text-transform: uppercase;
+}
+.sub-group .opt-seg-row { margin-top: 0; }
+.sub-group .opt-seg-hint { margin-top: 0; }
+/* 값 숫자는 라벨보다 진하게 — 훑을 때 눈이 값으로 먼저 가도록 */
+.val-strong-wrap .label-tip-input { width: 34px; font-size: 12px; font-weight: 700; color: var(--text-main); }
+.val-strong-unit { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+/* 좌·우 간격 링크 토글 — 눌러서 따로/같이 전환 */
+.link-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; padding: 0; margin-left: auto;
+    border: 1px solid rgba(0,0,0,0.12); border-radius: 6px;
+    background: var(--surface); color: var(--text-tertiary);
+    cursor: pointer; transition: all .15s ease;
+}
+.link-btn:hover { border-color: rgba(0,0,0,0.28); color: var(--text-main); }
+.link-btn.linked { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+.link-btn + .label-tip-wrap { margin-left: 8px; }
+.gap-right-row[hidden] { display: none; }
+/* 균등 맞춤 후 내용이 바뀐 상태 — 다시 맞추라는 주황 강조 */
+.btn-restale {
+    flex: 0 0 auto; font-size: 11px; font-weight: 700; white-space: nowrap;
+    padding: 7px 10px; border: none; border-radius: 8px;
+    background: #FF9500; color: #fff; cursor: pointer;
+    transition: filter .15s ease; font-family: inherit;
+}
+.btn-restale:hover { filter: brightness(.95); }
+.btn-restale[hidden] { display: none; }
 .design-group-hint {
     font-size: 10.5px; font-weight: 500;
     color: var(--text-tertiary); text-transform: none; letter-spacing: 0;
@@ -328,8 +361,8 @@ body {
 .file-clear:hover { background: #FF3B30; color: #fff; }
 /* 로고는 잘라내지 않고 전체가 보여야 원본 비율을 가늠할 수 있다 */
 .logo-thumb { object-fit: contain; background: #fff; }
-/* 로고 크기 슬라이더 — 드롭존 바로 아래 딸린 하위 설정 */
-.logo-scale-group { margin-top: 2px; }
+/* 로고 크기·세로 위치 슬라이더 — 드롭존 바로 아래 딸린 하위 설정 */
+.logo-scale-group { display: flex; flex-direction: column; gap: 11px; margin-top: 2px; }
 .logo-scale-group[hidden] { display: none; }
 
 /* ── 슬라이더 ── */
@@ -458,21 +491,6 @@ body {
 .btn-toggle-all:hover { background: rgba(0,0,0,0.08); color: var(--text-main); }
 .btn-toggle-all.btn-toggle-active { background: var(--primary); color: #fff; }
 .btn-toggle-all.btn-toggle-active:hover { background: var(--primary); color: #fff; filter: brightness(.95); }
-/* 균등 맞춤 켠 뒤 내용이 바뀐 상태(재정렬 필요) — 주의 환기용 주황 강조 */
-.btn-toggle-all.btn-toggle-stale { background: #FF9500; color: #fff; }
-.btn-toggle-all.btn-toggle-stale:hover { background: #FF9500; color: #fff; filter: brightness(.95); }
-/* '좌우 균등 맞춤' 켜진(활성) 상태 — 파란색 강조('한 번에 자동 맞춤'과 동일).
- * '다시 맞추기'(stale) 주황 경고는 위 규칙으로 그대로 유지. */
-/* 디자인 탭 하단 전폭 균등 맞춤 버튼 */
-.btn-balance-full {
-    width: 100%; padding: 11px 14px; font-size: 12.5px; border-radius: var(--radius-md);
-    background: rgba(0,0,0,0.05); color: var(--text-main); margin-top: 4px;
-}
-.btn-balance-full:hover { background: rgba(0,0,0,0.09); }
-/* 균등 맞추기 버튼(좌 절반) + 끝까지 채우기 토글(우 절반)을 한 행에 */
-.balance-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
-.balance-row .btn-balance-half { width: auto; flex: 0 0 46%; margin-top: 0; }
-.balance-row .bottom-exact-inline { flex: 1; min-width: 0; margin-top: 0; padding-left: 2px; gap: 9px; }
 /* 원클릭 '한 번에 자동 맞춤' — 파란색 강조(주 버튼) */
 .btn-auto-all { margin-top: 10px; background: var(--primary); color: #fff; font-weight: 700; }
 .btn-auto-all:hover { background: var(--primary); color: #fff; filter: brightness(.95); }
