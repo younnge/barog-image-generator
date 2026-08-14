@@ -1,3 +1,7 @@
+# 배포 전 검증 게이트.
+# needs: 는 같은 워크플로 파일 안의 job 끼리만 참조할 수 있으므로,
+# 검증을 별도 워크플로(test.yml)에 두지 않고 이 파일 안의 job 으로 둔다.
+# test.yml 은 pull_request 검증용으로 계속 유지된다.
 name: Deploy to GitHub Pages
 
 on:
@@ -15,7 +19,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: image
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 구문 검사
+        run: node --check main.js
+
+      - name: 단위 테스트
+        run: npm test
+
   deploy:
+    needs: verify          # 검증 실패 시 배포하지 않는다
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

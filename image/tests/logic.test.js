@@ -9,9 +9,10 @@ const assert = require('assert');
 const path = require('path');
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-// 최상위에서 참조하는 브라우저 전역만 최소 스텁(함수 본문은 실행되지 않음)
+// 최상위에서 참조하는 브라우저 전역만 최소 스텁(함수 본문은 실행되지 않음).
+// main.js 는 로드 시점에 전역 오류 핸들러를 등록하므로 addEventListener 가 있어야 한다.
 const sandbox = {
-    window: {}, document: {}, console, Math, JSON, String, Array, RegExp, Object,
+    window: { addEventListener() {} }, document: {}, console, Math, JSON, String, Array, RegExp, Object,
     parseInt, parseFloat, Set, Map, Uint8Array, isNaN
 };
 vm.createContext(sandbox);

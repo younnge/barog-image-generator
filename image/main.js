@@ -39,6 +39,32 @@ const SCHEMA_VERSION = 1;   // 저장 스키마 버전 — 향후 구조 변경 
 const MAX_RESTORE_ITEMS = 2000;   // 백업 복원 시 항목 수 상한(손상/악성 파일 DoS 방지)
 
 /* ============================================================
+ * 전역 오류 감시
+ * ============================================================ */
+/* 렌더 경로는 자체 try/catch 로 사용자에게 오류를 알리지만, 그 밖에서 난 예외는
+ * 지금까지 조용히 사라져 사용자도 개발자도 인지할 수 없었다.
+ * 백엔드가 없어 원격 수집은 불가하므로 (1) 콘솔에 상세를 남기고 (2) 사용자에게 알린다.
+ * 같은 오류가 반복될 때 토스트가 도배되지 않도록 오류 종류별로 한 번만 알린다. */
+const _reportedErrors = new Set();
+const MAX_REPORTED_ERRORS = 50;   // 서로 다른 오류가 계속 생겨도 무한히 쌓이지 않게
+function reportRuntimeError(kind, detail, raw) {
+    console.error(`[${kind}] ${detail}`, raw ?? '');
+    const key = `${kind}|${detail}`;
+    if (_reportedErrors.has(key)) return;      // 같은 오류 반복 → 토스트는 첫 회만
+    if (_reportedErrors.size >= MAX_REPORTED_ERRORS) _reportedErrors.clear();
+    _reportedErrors.add(key);
+    showColorToast('예기치 못한 오류가 발생했습니다. 문제가 계속되면 새로고침해 주세요.');
+}
+window.addEventListener('error', e => {
+    // 이미지·스크립트 로드 실패는 각 onerror 에서 안내하므로 여기서는 제외(target 이 요소면 리소스 오류)
+    if (e.target && e.target !== window) return;
+    reportRuntimeError('실행 오류', `${e.message} @ ${e.filename || '?'}:${e.lineno || 0}`, e.error);
+});
+window.addEventListener('unhandledrejection', e => {
+    reportRuntimeError('처리되지 않은 오류', String(e.reason?.message || e.reason), e.reason);
+});
+
+/* ============================================================
  * 의료법 위반 사전 (기존 앱과 동일)
  * ============================================================ */
 const BANNED_WORDS = {
