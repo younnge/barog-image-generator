@@ -13,19 +13,21 @@
     src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansBold.woff') format('woff');
     font-weight: normal; font-style: normal; font-display: swap;
 }
+/* Paperlogy 는 캔버스 본문 폰트 체인의 맨 앞이라 바뀌면 인쇄물 글자 모양이 곧바로 달라진다.
+   @main(브랜치)은 상류가 바뀌면 무통보로 따라가므로 커밋 해시로 고정한다. 2025-03-31 커밋. */
 @font-face {
     font-family: 'Paperlogy';
-    src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-4Regular.woff2') format('woff2');
+    src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@d73efc3cd471a7faf198f39b1783b14da13dd7c4/Paperlogy-4Regular.woff2') format('woff2');
     font-weight: 400; font-style: normal; font-display: swap;
 }
 @font-face {
     font-family: 'Paperlogy';
-    src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-6SemiBold.woff2') format('woff2');
+    src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@d73efc3cd471a7faf198f39b1783b14da13dd7c4/Paperlogy-6SemiBold.woff2') format('woff2');
     font-weight: 600; font-style: normal; font-display: swap;
 }
 @font-face {
     font-family: 'Paperlogy';
-    src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-7Bold.woff2') format('woff2');
+    src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@d73efc3cd471a7faf198f39b1783b14da13dd7c4/Paperlogy-7Bold.woff2') format('woff2');
     font-weight: 700; font-style: normal; font-display: swap;
 }
 

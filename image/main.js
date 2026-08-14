@@ -499,26 +499,35 @@ function saveToSessionStorage(data = null) {
         showColorToast('세션 저장 실패: 브라우저 저장 공간이 부족합니다');
         return;
     }
-    if (cachedBgImg?.src?.startsWith('data:')) {
-        try {
-            sessionStorage.setItem(SS_BG_KEY, cachedBgImg.src);
-            sessionStorage.setItem(SS_BG_NAME_KEY, bgFileName);
-        }
-        catch(e) { showColorToast('배경 이미지가 너무 커 세션에 저장되지 않았습니다'); }
-    }
-    if (cachedLogoImg?.src?.startsWith('data:')) {
-        try {
-            sessionStorage.setItem(SS_LOGO_KEY, cachedLogoImg.src);
-            sessionStorage.setItem(SS_LOGO_NAME_KEY, logoFileName);
-        }
-        catch(e) { showColorToast('로고 이미지가 너무 커 세션에 저장되지 않았습니다'); }
+    persistSessionImage('bg', cachedBgImg, SS_BG_KEY, SS_BG_NAME_KEY, bgFileName, '배경');
+    persistSessionImage('logo', cachedLogoImg, SS_LOGO_KEY, SS_LOGO_NAME_KEY, logoFileName, '로고');
+}
+
+/* 세션에 마지막으로 쓰려고 시도한 이미지 — 같은 이미지를 편집마다 다시 쓰지 않기 위한 기록.
+ * 이전에는 스냅샷마다(타이핑 멈출 때마다) 수 MB 데이터URL 을 무조건 재직렬화했고,
+ * 용량을 넘으면 그때마다 예외가 나 같은 토스트가 반복됐다. */
+const _ssImageWritten = { bg: null, logo: null };
+function persistSessionImage(kind, img, srcKey, nameKey, fileName, label) {
+    const src = img?.src?.startsWith('data:') ? img.src : null;
+    if (!src) { _ssImageWritten[kind] = null; return; }
+    if (_ssImageWritten[kind] === src) return;   // 같은 이미지 — 이미 처리했다
+    // 성공·실패 모두 기록한다. 실패한 이미지를 매번 다시 시도하면 토스트가 도배된다.
+    _ssImageWritten[kind] = src;
+    try {
+        sessionStorage.setItem(srcKey, src);
+        sessionStorage.setItem(nameKey, fileName);
+    } catch(e) {
+        // 새로고침하면 사라진다는 사실과 대처법을 함께 알린다(용량 초과는 사용자가 손쓸 수 없음)
+        showColorToast(`${label} 이미지가 커서 새로고침하면 사라집니다 — 저장 버튼으로 백업해 두세요`);
     }
 }
 /* 배경을 지웠을 때 세션에 남은 배경까지 비운다(새로고침 시 지운 배경이 되살아나지 않게). */
 function clearSessionBg() {
+    _ssImageWritten.bg = null;   // 같은 이미지를 다시 넣었을 때 저장이 건너뛰어지지 않도록
     try { sessionStorage.removeItem(SS_BG_KEY); sessionStorage.removeItem(SS_BG_NAME_KEY); } catch(e) {}
 }
 function clearSessionLogo() {
+    _ssImageWritten.logo = null;
     try { sessionStorage.removeItem(SS_LOGO_KEY); sessionStorage.removeItem(SS_LOGO_NAME_KEY); } catch(e) {}
 }
 /* 배경을 완전히 제거 — 캔버스용 이미지·드롭존 표시·세션 저장본·파일 입력값까지 한 번에.
@@ -543,11 +552,12 @@ function restoreFromSessionStorage() {
         const saved = sessionStorage.getItem(SS_KEY);
         if (!saved) return false;
         restoreSnapshot(JSON.parse(saved));
+        // 세션에서 되살린 이미지는 이미 세션에 있으므로 '쓴 것'으로 표시해 재기록을 건너뛴다
         const bgData = sessionStorage.getItem(SS_BG_KEY);
         if (bgData) {
             const bgName = sessionStorage.getItem(SS_BG_NAME_KEY) || '';
             const img = new Image();
-            img.onload = () => { cachedBgImg = img; showBgThumb(bgData, bgName); generateImages(); };
+            img.onload = () => { cachedBgImg = img; _ssImageWritten.bg = bgData; showBgThumb(bgData, bgName); generateImages(); };
             img.onerror = () => { clearBackground(); generateImages(); };   // 손상된 저장 배경은 조용히 제거
             img.src = bgData;
         }
@@ -555,7 +565,7 @@ function restoreFromSessionStorage() {
         if (logoData) {
             const logoName = sessionStorage.getItem(SS_LOGO_NAME_KEY) || '';
             const img = new Image();
-            img.onload = () => { cachedLogoImg = img; showLogoThumb(logoData, logoName); generateImages(); };
+            img.onload = () => { cachedLogoImg = img; _ssImageWritten.logo = logoData; showLogoThumb(logoData, logoName); generateImages(); };
             img.onerror = () => { clearLogo(); generateImages(); };
             img.src = logoData;
         }
