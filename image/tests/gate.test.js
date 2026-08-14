@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { group, test, report } = require('./helpers/tinytest');
+const { group, test, finish } = require('./helpers/tinytest');
 const { makeElement } = require('./helpers/sandbox');
 
 const GATE = fs.readFileSync(path.join(__dirname, '..', 'gate.js'), 'utf8');
@@ -196,4 +196,4 @@ test('걷어낼 지점이 한곳에 모여 있다', () => {
     assert.ok(/Cloudflare Access/.test(GATE), 'gate.js 에 이전 안내가 있어야 함');
 });
 
-if (require.main === module) process.exit(report('gate'));
+if (require.main === module) finish('gate');

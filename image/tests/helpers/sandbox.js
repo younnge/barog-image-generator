@@ -124,7 +124,12 @@ function createSandbox(opts = {}) {
         body: { appendChild(c) { bodyNodes.push(c); c._parent = { children: bodyNodes }; } },
         documentElement: { style: { setProperty() {} } },
         // main.js 는 폰트 로드 후 1회 재렌더한다 — 테스트에서는 즉시 이행되지 않게 둔다
-        fonts: { ready: { then() { return this; } } },
+        fonts: {
+            ready: { then() { return this; } },
+            /* 캔버스 폰트 확인용. 기본은 '전부 도착'이며, 테스트가
+             * sandbox.document.fonts.load 를 갈아끼워 실패 상황을 만든다. */
+            load: spec => Promise.resolve([{ family: String(spec) }]),
+        },
     };
 
     const sessionStorage = {

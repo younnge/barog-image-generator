@@ -6,7 +6,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { group, test, report } = require('./helpers/tinytest');
+const { group, test, finish } = require('./helpers/tinytest');
 const { createSandbox } = require('./helpers/sandbox');
 
 const HTML = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
@@ -66,4 +66,4 @@ test('초기화가 이름 있는 단계로 나뉘어 있다', () => {
     assert.ok(size <= 120, `window.onload 가 ${size}줄 — 단계별 함수로 나눠야 함(상한 120줄)`);
 });
 
-if (require.main === module) process.exit(report('init'));
+if (require.main === module) finish('init');

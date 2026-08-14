@@ -4,7 +4,7 @@
  * main.js 는 클래식 스크립트(전역 함수 선언)이므로 vm 샌드박스에서 평가한 뒤
  * 캔버스가 필요 없는 순수 함수만 골라 검증한다. */
 const assert = require('assert');
-const { group, test, report } = require('./helpers/tinytest');
+const { group, test, finish } = require('./helpers/tinytest');
 const { createSandbox } = require('./helpers/sandbox');
 
 const { sandbox } = createSandbox();
@@ -108,4 +108,4 @@ test('위반 없는 문구는 빈 배열', () => {
     assert.strictEqual(sandbox.checkMedicalLaw('보톡스 이벤트').length, 0);
 });
 
-if (require.main === module) process.exit(report('logic'));
+if (require.main === module) finish('logic');

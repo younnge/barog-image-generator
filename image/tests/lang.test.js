@@ -1,7 +1,7 @@
 /* 언어 자동 판별 — 선택창을 없앤 뒤 문구만으로 폰트 체인을 정하므로,
  * 오판이 곧 인쇄물의 글자 모양이 달라지는 결과로 이어진다. */
 const assert = require('assert');
-const { group, test, report } = require('./helpers/tinytest');
+const { group, test, finish } = require('./helpers/tinytest');
 const { createSandbox } = require('./helpers/sandbox');
 
 const env = createSandbox();
@@ -83,4 +83,4 @@ test('알 수 없는 언어 코드는 한국어로 폴백', () => {
     assert.strictEqual(env.read('docLang'), 'ko');
 });
 
-if (require.main === module) process.exit(report('lang'));
+if (require.main === module) finish('lang');

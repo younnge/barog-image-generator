@@ -3,7 +3,7 @@
  * 측정(measureSection)과 그리기(drawSection)가 어긋나면 섹션이 겹치거나
  * 흰 카드 밖으로 삐져나온다. 화면으로만 확인하기 어려운 종류라 수치로 잠근다. */
 const assert = require('assert');
-const { group, test, report } = require('./helpers/tinytest');
+const { group, test, finish } = require('./helpers/tinytest');
 const { createSandbox } = require('./helpers/sandbox');
 
 const env = createSandbox({ canvas: true });
@@ -175,4 +175,4 @@ test('로고가 없으면 헤더가 늘어나지 않는다', () => {
     assert.strictEqual(sandbox.logoBlockHeight(null, 100, TOP_DEF), 0);
 });
 
-if (require.main === module) process.exit(report('render'));
+if (require.main === module) finish('render');

@@ -1529,6 +1529,63 @@ function applyDocLang(lang) {
     CONFIG.fonts = buildFonts(docLang);
 }
 
+/* ── 캔버스 웹폰트 도착 확인 ──
+ * 이 폰트들은 style.css 의 @font-face 로만 선언돼 있고 화면(DOM)에서는 쓰이지 않는다.
+ * 오직 ctx.font 로만 쓰이는데, 캔버스 사용이 웹폰트 다운로드를 유발하는지는 브라우저마다
+ * 달라 보장할 수 없다. 그래서 여기서 명시적으로 요청하고 도착 여부까지 확인한다.
+ *
+ * 확인이 필요한 이유 — 폰트를 못 받으면 대체 글꼴로 조용히 그려진다. 미리보기에도 같은
+ * 모습이라 화면만으로는 알아채기 어렵고, 그대로 인쇄되면 재인쇄 비용이 든다.
+ *
+ * 한국어 핵심 4종만 본다. Noto(일·중·태)는 유니코드 서브셋으로 쪼개져 들어와
+ * '필요 없어서 안 받은 것'과 '못 받은 것'을 구분할 수 없다 — 헛경보를 내느니 뺀다.
+ * 굵기는 @font-face 에 선언된 값을 그대로 쓴다(파일 도착 여부만 보면 되므로). */
+const CANVAS_WEBFONTS = [
+    { spec: "400 20px 'Paperlogy'",         sample: '가', label: '본문' },
+    { spec: "700 20px 'Paperlogy'",         sample: '가', label: '제목' },
+    { spec: "400 20px 'GmarketSansBold'",   sample: '0',  label: '금액' },
+    { spec: "400 20px 'GmarketSansMedium'", sample: '가', label: '단위' }
+];
+
+/* 캔버스 폰트를 명시적으로 불러오고, 못 받은 것의 이름을 돌려준다.
+ * 하나가 실패해도 나머지는 계속 기다린다 — 어디까지 됐는지 알려야 안내가 정확해진다. */
+function loadCanvasWebfonts() {
+    if (!document.fonts || typeof document.fonts.load !== 'function') return Promise.resolve([]);
+    return Promise.all(CANVAS_WEBFONTS.map(f =>
+        document.fonts.load(f.spec, f.sample)
+            // 일치하는 @font-face 가 없으면 빈 배열이 온다(예외가 아니다).
+            // 폰트 CSS 자체를 못 받은 경우가 여기에 해당하므로 길이를 반드시 본다.
+            .then(faces => (faces && faces.length ? null : f.label))
+            .catch(() => f.label)
+    )).then(missing => [...new Set(missing.filter(Boolean))]);
+}
+
+/* 폰트 경고 배너 — 렌더 경고(setFloatingWarn)와 달리 스스로 지워지지 않는다.
+ * 새로고침해야 해결되는 환경 문제라, 사용자가 조치할 때까지 남겨 둔다. */
+function setFontWarn(missing) {
+    const el = document.getElementById('fontWarn');
+    if (!el) return;
+    if (!missing || !missing.length) { el.hidden = true; el.textContent = ''; return; }
+    el.textContent = `⚠ 글꼴을 불러오지 못했습니다 (${missing.join('·')}) — `
+        + '인쇄물 글자 모양과 줄바꿈이 평소와 달라집니다. '
+        + '네트워크 연결을 확인한 뒤 새로고침해 주세요.';
+    el.hidden = false;
+}
+
+/* 폰트를 받아 정확한 메트릭으로 다시 그리고, 못 받은 게 있으면 알린다.
+ * 실패해도 렌더는 반드시 한 번 돈다 — 대체 글꼴로라도 보이는 편이 빈 화면보다 낫다.
+ * 프로미스를 돌려주는 이유는 테스트가 완료 시점을 붙잡기 위해서다(앱은 기다리지 않는다). */
+function verifyCanvasFonts() {
+    return loadCanvasWebfonts().then(missing => {
+        setFontWarn(missing);
+        if (missing.length) console.warn('[폰트] 불러오지 못함:', missing.join(', '));
+        generateImages();
+    }).catch(err => {
+        console.error('[폰트] 확인 실패:', err);
+        generateImages();
+    });
+}
+
 /* ── 문서 언어 자동 판별 ──
  * 겹칠 수 없는 문자 대역(태국·가나·한글)이 있으면 그것으로 확정한다.
  * 한자만 있으면 간체/번체를 가려야 하는데, 이때만 아래 글자표로 개수를 센다.
@@ -4485,8 +4542,9 @@ function bootstrapContent() {
         saveSnapshot();
     }
     // 폰트 로딩 완료 후 정확한 메트릭으로 1회 재렌더 (복원·샘플 공통).
-    // 폰트가 늦게 로드되면 측정값이 어긋나므로 fonts.ready 시점에 한 번 더 그린다.
-    document.fonts.ready.then(() => generateImages());
+    // 폰트가 늦게 로드되면 측정값이 어긋나므로 도착을 기다렸다가 한 번 더 그린다.
+    // fonts.ready 는 '실패'도 완료로 보고 이행되므로, 도착 여부까지 확인하는 쪽을 쓴다.
+    verifyCanvasFonts();
     applyColumnTabFilter();
     initBookmarkObserver();
     refreshBookmarks();

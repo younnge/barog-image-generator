@@ -1,7 +1,7 @@
 /* 의료법 위반어 감지 — 이 앱이 존재하는 이유에 직접 걸린 기능.
  * 검사에서 빠진 입력칸이 있으면 금지어가 그대로 인쇄되므로 배선까지 확인한다. */
 const assert = require('assert');
-const { group, test, report } = require('./helpers/tinytest');
+const { group, test, finish } = require('./helpers/tinytest');
 const { createSandbox } = require('./helpers/sandbox');
 
 const env = createSandbox({ dom: true });
@@ -89,4 +89,4 @@ test('닫은 뒤 다시 입력하면 툴팁이 되살아난다', () => {
     sandbox.dismissViolationTooltips();
 });
 
-if (require.main === module) process.exit(report('violation'));
+if (require.main === module) finish('violation');

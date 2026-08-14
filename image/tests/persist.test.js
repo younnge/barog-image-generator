@@ -1,7 +1,7 @@
 /* 저장 · 복원 — 백업과 세션이 설정을 온전히 실어 나르는지, 그리고
  * 편집마다 이미지를 다시 쓰던 낭비가 재발하지 않는지. */
 const assert = require('assert');
-const { group, test, report } = require('./helpers/tinytest');
+const { group, test, finish } = require('./helpers/tinytest');
 const { createSandbox } = require('./helpers/sandbox');
 
 const env = createSandbox({ dom: true, storage: true });
@@ -111,4 +111,4 @@ test('안내 문구가 결과와 대처법을 함께 알린다', () => {
     assert.ok(/저장 버튼으로 백업/.test(msg), '대처법을 알려야 함: ' + msg);
 });
 
-if (require.main === module) process.exit(report('persist'));
+if (require.main === module) finish('persist');

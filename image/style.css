@@ -1015,6 +1015,16 @@ body {
 .status-chip.warn { background: rgba(255,59,48,0.1); color: #FF3B30; }
 .status-chip.error { background: rgba(255,59,48,0.12); color: #FF3B30; }
 
+/* 웹폰트 미수신 경고 — 인쇄물 글자 모양이 달라지는 상황이라 눈에 띄되,
+   미리보기를 가리지 않게 위에 얇게 깐다. 렌더 경고와 달리 스스로 사라지지 않는다. */
+.font-warn {
+    margin-bottom: 12px; padding: 9px 13px;
+    border: 1px solid rgba(255,149,0,0.35); border-radius: var(--radius-sm);
+    background: rgba(255,149,0,0.09); color: #B25E00;
+    font-size: 12px; font-weight: 600; line-height: 1.5;
+}
+.font-warn[hidden] { display: none; }
+
 #previewContainer {
     flex: 1; overflow-y: auto;
     display: flex; flex-direction: column; gap: 20px;

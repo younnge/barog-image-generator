@@ -402,6 +402,9 @@
                 <h2>미리보기 <small>(A4 · 2480×3508px)</small></h2>
                 <span id="statusChip" class="status-chip"></span>
             </div>
+            <!-- 웹폰트를 못 받았을 때만 표시. 넘침·헤더 경고(statusChip·floatingWarn)와는
+                 성격이 달라(환경 문제 · 렌더마다 초기화되면 안 됨) 별도 자리를 둔다. -->
+            <div id="fontWarn" class="font-warn" role="alert" hidden></div>
             <div id="previewContainer">
                 <div class="placeholder-text" id="placeholder">
                     <p style="font-size:40px;margin-bottom:16px;">📄</p>
