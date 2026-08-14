@@ -200,11 +200,38 @@ function updateViolationUI(el) {
     if (el._vlBlur) el.removeEventListener('blur', el._vlBlur);
     el._vlBlur = startHideTimer;
     el.addEventListener('blur', el._vlBlur);
+    tooltip._owner = el;   // 스크롤 해제 시 주인을 되찾기 위해
     document.body.appendChild(tooltip);
     el._violTooltip = tooltip;
     const eRect = el.getBoundingClientRect();
     tooltip.style.top = (eRect.bottom + 4) + 'px';
     tooltip.style.left = eRect.left + 'px';
+}
+
+/* 열려 있는 위반 툴팁을 모두 닫는다.
+ * 툴팁은 body 에 붙는 position:fixed 라 위치를 띄울 때 한 번만 계산한다.
+ * 입력칸이 든 패널이 스크롤되면 툴팁만 제자리에 남아 엉뚱한 곳을 가리키므로,
+ * 스크롤이 일어나면 닫아서 다음 상호작용 때 올바른 위치로 다시 뜨게 한다. */
+function dismissViolationTooltips() {
+    document.querySelectorAll('.violation-tooltip').forEach(t => {
+        const owner = t._owner;
+        if (owner) {
+            clearTimeout(owner._tipTimer);
+            owner._violTooltip = null;
+            owner.removeAttribute('data-last-violation');   // 지워야 다시 띄울 수 있다
+        }
+        t.remove();
+    });
+}
+
+/* 의료법 검사를 붙일 입력칸 — 항목 영역 밖(제목·기간·기간 우측)은 이벤트 위임이 닿지 않아
+ * 개별로 배선한다. 전단지에서 가장 크게 인쇄되는 문구들이라 검사에서 빠지면 안 된다. */
+function wireViolationCheck(el) {
+    if (!el) return;
+    el.addEventListener('input', () => updateViolationUI(el));
+    el.addEventListener('focus', () => updateViolationUI(el));
+    el.addEventListener('paste', () => setTimeout(() => updateViolationUI(el), 0));   // 붙여넣기 반영 후 검사
+    updateViolationUI(el);   // 저장된 내용이 이미 들어있는 경우를 위해 초기 1회
 }
 
 /* ============================================================
@@ -318,6 +345,12 @@ function restoreSnapshot(data) {
     if (data.topText !== undefined) { const el = document.getElementById('topText'); el.value = data.topText; autoResizeTextarea(el); }
     if (data.periodText !== undefined) document.getElementById('periodText').value = data.periodText;
     if (data.periodNote !== undefined) document.getElementById('periodNote').value = data.periodNote;
+    // 헤더 3칸은 항목 영역과 달리 노드가 살아있는 채 값만 바뀐다.
+    // 다시 검사하지 않으면 이전 값의 경고 표시·툴팁이 그대로 남는다(되돌리기 후 유령 경고).
+    ['topText', 'periodText', 'periodNote'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) updateViolationUI(el);
+    });
     if (data.textColor) updateTextColorSync(data.textColor);
     if (data.themeColor) updateColorSync(data.themeColor);
     if (data.numColor) updateNumColorSync(data.numColor);
@@ -3962,6 +3995,11 @@ window.onload = () => {
     });
 
     // 상단 텍스트
+    // 제목·기간·기간 우측 텍스트 의료법 검사 — 항목 영역 밖이라 위임이 닿지 않아 개별 배선
+    ['topText', 'periodText', 'periodNote'].forEach(id => wireViolationCheck(document.getElementById(id)));
+    // 패널이 스크롤되면 열려 있던 툴팁을 닫는다(위치가 한 번만 계산되어 제자리에 남기 때문)
+    document.addEventListener('scroll', dismissViolationTooltips, { capture: true, passive: true });
+
     const topInput = document.getElementById('topText');
     topInput.addEventListener('input', () => { autoResizeTextarea(topInput); debouncedGenerateImages(); handleInputSnapshot(); });
     topInput.addEventListener('focus', () => { topInput._before = topInput.value; });
@@ -3979,6 +4017,7 @@ window.onload = () => {
         topInput.setSelectionRange(cursor, cursor);
         topInput.focus();
         autoResizeTextarea(topInput);
+        updateViolationUI(topInput);   // 서식 토큰 삽입으로 문구가 바뀌므로 다시 검사
         debouncedGenerateImages();
         handleInputSnapshot();
     });
@@ -4000,6 +4039,7 @@ window.onload = () => {
         const cursor = sel ? s + open.length + sel.length + close.length : s + open.length;
         periodInput.setSelectionRange(cursor, cursor);
         periodInput.focus();
+        updateViolationUI(periodInput);   // 서식 토큰 삽입으로 문구가 바뀌므로 다시 검사
         debouncedGenerateImages();
         handleInputSnapshot();
     });
@@ -4021,6 +4061,7 @@ window.onload = () => {
         const cursor = sel ? s + open.length + sel.length + close.length : s + open.length;
         periodNoteInput.setSelectionRange(cursor, cursor);
         periodNoteInput.focus();
+        updateViolationUI(periodNoteInput);   // 서식 토큰 삽입으로 문구가 바뀌므로 다시 검사
         debouncedGenerateImages();
         handleInputSnapshot();
     });
@@ -4212,7 +4253,9 @@ window.onload = () => {
         const t = e.target;
         if (t.matches('.btn-input')) {
             if (t.tagName === 'TEXTAREA') autoResizeTextarea(t);
-            if (t.classList.contains('section-title-input') || t.classList.contains('item-name')) updateViolationUI(t);
+            // 항목명·섹션 제목뿐 아니라 비고·가격 칸까지 타이핑 중 검사한다.
+            // (이전에는 포커스·붙여넣기 때만 검사돼 입력 중에는 경고가 뜨지 않았다)
+            updateViolationUI(t);
             markBalanceStale();
             debouncedGenerateImages();
             handleInputSnapshot();
